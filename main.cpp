@@ -85,6 +85,12 @@ typedef enum
     eACTION_FIRE        = 3,
 } action_t;
 
+typedef enum _TFacing
+{
+    eFACING_LEFT = 0,
+    eFACING_RIGHT = 1
+} TFacing;
+
 typedef struct _TPlayer
 {
     // unscaled
@@ -96,7 +102,7 @@ typedef struct _TPlayer
     bool jumping;
     signed int jumpedSoFar;
 
-    signed int tileID;
+    TFacing facing;
 } TPlayer;
 
 namespace GLOBALS
@@ -115,15 +121,19 @@ namespace GLOBALS
 static void atexitwrapper_PhysFS_deinit(void) { PHYSFS_deinit(); }
 
 static bool InitGame(int argc, char **argv);
-static void PlayGame(void);
 static void DoTitleScreen(void);
 static void DoMainMenu(void);
+static void PlayGame(void);
+static void ShutdownGame(void);
+
 static void RedrawScreen(void);
 static void ProcessAction(action_t action);
-static void ShutdownGame(void);
 static void CreateBackgroundImage(void);
+
 static bool OnSolidGround(void);
 static bool CanMoveUp(void);
+
+static unsigned int PlayerTileID(void);
 
 int main(int argc, char **argv)
 {
@@ -268,10 +278,9 @@ void PlayGame(void)
     GLOBALS::player.xVelocity = 2;
     GLOBALS::player.yVelocity = 2;
 
-    // right-facing standing Sam
-    GLOBALS::player.tileID = 366;
     GLOBALS::player.jumping = false;
     GLOBALS::player.jumpedSoFar = 0;
+    GLOBALS::player.facing = eFACING_RIGHT;
 
     RedrawScreen();
 
@@ -419,7 +428,7 @@ void RedrawScreen(void)
 
     // TODO:
     //    draw all enemies and the player and shots
-    const unsigned int playerTileID = GLOBALS::player.tileID; // Sam facing right standing #1
+    const unsigned int playerTileID = PlayerTileID();
     const unsigned int atlasWidth_tiles = al_get_bitmap_width(GLOBALS::tileAtlas_unscaled) / TILE_WIDTH_PIXELS_UNSCALED;
     al_draw_scaled_bitmap(GLOBALS::tileAtlas_unscaled,
                                       (playerTileID % atlasWidth_tiles) * TILE_WIDTH_PIXELS_UNSCALED, (playerTileID / atlasWidth_tiles) * TILE_HEIGHT_PIXELS_UNSCALED,
@@ -447,7 +456,7 @@ void ProcessAction(action_t action)
     switch (action)
     {
         case eACTION_MOVE_LEFT:
-            GLOBALS::player.tileID = 389;
+            GLOBALS::player.facing = eFACING_LEFT;
 
             tileY = (GLOBALS::player.y + (TILE_HEIGHT_PIXELS_UNSCALED / 2)) / TILE_HEIGHT_PIXELS_UNSCALED;
 
@@ -463,7 +472,7 @@ void ProcessAction(action_t action)
             break;
 
         case eACTION_MOVE_RIGHT:
-            GLOBALS::player.tileID = 366;
+            GLOBALS::player.facing = eFACING_RIGHT;
 
             tileY = (GLOBALS::player.y + (TILE_HEIGHT_PIXELS_UNSCALED / 2)) / TILE_HEIGHT_PIXELS_UNSCALED;
 
@@ -674,3 +683,26 @@ bool sprite_collide(const sprite *object1, const sprite *object2)
     return collision;
 }
 #endif
+
+unsigned int PlayerTileID(void)
+{
+    if (GLOBALS::player.facing == eFACING_LEFT)
+    {
+        if (GLOBALS::player.jumping)
+            return 436;
+        else
+            return 389;
+    }
+    else if (GLOBALS::player.facing == eFACING_RIGHT)
+    {
+        if (GLOBALS::player.jumping)
+            return 435;
+        else
+            return 366;
+    }
+    else
+    {
+        // unexpected facing direction
+        assert(false);
+    }
+}

@@ -263,6 +263,8 @@ void PlayGame(void)
     int i;
     ALLEGRO_EVENT event;
 
+    bool wants_left = false, wants_right = false, wants_jump = false, wants_fire = false;
+
     CreateBackgroundImage( /* level number? */ );
 
     /* starting tile position is mapcode 1 */
@@ -297,8 +299,8 @@ void PlayGame(void)
                     done = true;
                     break;
 
-                /* translate key-press input into internal events */
-                case ALLEGRO_EVENT_KEY_CHAR:
+                /* translate key-press input into internal events, with manual handling of repeats */
+                case ALLEGRO_EVENT_KEY_DOWN:
                     switch (event.keyboard.keycode)
                     {
                         case ALLEGRO_KEY_ESCAPE:
@@ -307,27 +309,58 @@ void PlayGame(void)
 
                         case ALLEGRO_KEY_LEFT:
                         case ALLEGRO_KEY_PAD_4:
-                            ProcessAction(eACTION_MOVE_LEFT);
+                            wants_left = true;
                             break;
 
                         case ALLEGRO_KEY_RIGHT:
                         case ALLEGRO_KEY_PAD_6:
-                            ProcessAction(eACTION_MOVE_RIGHT);
+                            wants_right = true;
                             break;
 
                         case ALLEGRO_KEY_X:
-                            ProcessAction(eACTION_FIRE);
+                            wants_fire = true;
                             break;
 
                         case ALLEGRO_KEY_Z:
-                            ProcessAction(eACTION_JUMP);
+                            wants_jump = true;
                             break;
                     }
                     break;
 
+                case ALLEGRO_EVENT_KEY_UP:
+                    switch (event.keyboard.keycode)
+                    {
+                        case ALLEGRO_KEY_LEFT:
+                        case ALLEGRO_KEY_PAD_4:
+                            wants_left = false;
+                            break;
+
+                        case ALLEGRO_KEY_RIGHT:
+                        case ALLEGRO_KEY_PAD_6:
+                            wants_right = false;
+                            break;
+
+                        case ALLEGRO_KEY_X:
+                            wants_fire = false;
+                            break;
+
+                        case ALLEGRO_KEY_Z:
+                            wants_jump = false;
+                            break;
+                    }
+                    break;
                 // TODO: make the keys configurable (remap input option)
             } /* switch(event type) */
         }
+
+        if (wants_left)
+            ProcessAction(eACTION_MOVE_LEFT);
+        if (wants_right)
+            ProcessAction(eACTION_MOVE_RIGHT);
+        if (wants_fire)
+            ProcessAction(eACTION_FIRE);
+        if (wants_jump)
+            ProcessAction(eACTION_JUMP);
 
         // TODO: update each enemy and any shots fired
 

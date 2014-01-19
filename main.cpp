@@ -555,6 +555,10 @@ void CreateBackgroundImage(void)
 
 bool OnSolidGround(void)
 {
+    // can only possibly be on solid ground on a tile boundary
+    if ((GLOBALS::player.y % TILE_HEIGHT_PIXELS_UNSCALED) != 0)
+        return false;
+
     // X coord of the left-most column of the player
     int tileX = GLOBALS::player.x / TILE_WIDTH_PIXELS_UNSCALED;
 

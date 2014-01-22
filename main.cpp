@@ -91,6 +91,12 @@ typedef enum _TFacing
     eFACING_RIGHT = 1
 } TFacing;
 
+typedef enum _TMapCode
+{
+    eCODE_PLAYER_SPAWN = 1,
+    eCODE_DEATH        = 2
+} TMapCode;
+
 typedef struct _TPlayer
 {
     // unscaled
@@ -125,6 +131,7 @@ static void DoTitleScreen(void);
 static void DoMainMenu(void);
 static void PlayGame(void);
 static void ShutdownGame(void);
+static void ResetLevel(void);
 
 static void RedrawScreen(void);
 static void ProcessAction(action_t action);
@@ -132,6 +139,7 @@ static void CreateBackgroundImage(void);
 
 static bool OnSolidGround(void);
 static bool CanMoveUp(void);
+static bool InDeathSquare(void);
 
 static unsigned int PlayerTileID(void);
 
@@ -267,24 +275,7 @@ void PlayGame(void)
 
     CreateBackgroundImage( /* level number? */ );
 
-    /* starting tile position is mapcode 1 */
-    for (i = 0; i < (LEVEL_HEIGHT_TILES * LEVEL_WIDTH_TILES); ++i)
-        if (level1MapData.codes[i] == 1)
-        {
-            GLOBALS::player.x = (i % LEVEL_WIDTH_TILES) * TILE_WIDTH_PIXELS_UNSCALED;
-            GLOBALS::player.y = (i / LEVEL_WIDTH_TILES) * TILE_HEIGHT_PIXELS_UNSCALED;
-            break;
-        }
-
-    // unscaled pixels per step
-    GLOBALS::player.xVelocity = 2;
-    GLOBALS::player.yVelocity = 2;
-
-    GLOBALS::player.jumping = false;
-    GLOBALS::player.jumpedSoFar = 0;
-    GLOBALS::player.facing = eFACING_RIGHT;
-
-    RedrawScreen();
+    ResetLevel();
 
     while (!done)
     {
@@ -361,6 +352,12 @@ void PlayGame(void)
             ProcessAction(eACTION_FIRE);
         if (wants_jump)
             ProcessAction(eACTION_JUMP);
+
+        if (InDeathSquare())
+        {
+            ResetLevel();
+            continue;
+        }
 
         // TODO: update each enemy and any shots fired
 
@@ -738,4 +735,61 @@ unsigned int PlayerTileID(void)
         // unexpected facing direction
         assert(false);
     }
+}
+
+void ResetLevel(void)
+{
+    unsigned int i;
+
+    /* starting tile position is mapcode 1 */
+    for (i = 0; i < (LEVEL_HEIGHT_TILES * LEVEL_WIDTH_TILES); ++i)
+        if (level1MapData.codes[i] == eCODE_PLAYER_SPAWN)
+        {
+            GLOBALS::player.x = (i % LEVEL_WIDTH_TILES) * TILE_WIDTH_PIXELS_UNSCALED;
+            GLOBALS::player.y = (i / LEVEL_WIDTH_TILES) * TILE_HEIGHT_PIXELS_UNSCALED;
+            break;
+        }
+
+    // unscaled pixels per step
+    GLOBALS::player.xVelocity = 2;
+    GLOBALS::player.yVelocity = 2;
+
+    GLOBALS::player.jumping = false;
+    GLOBALS::player.jumpedSoFar = 0;
+    GLOBALS::player.facing = eFACING_RIGHT;
+
+    RedrawScreen();
+}
+
+bool InDeathSquare(void)
+{
+    unsigned int tileX, tileY, tileIndex;
+
+    // upper-left corner of player
+    tileY = GLOBALS::player.y / TILE_HEIGHT_PIXELS_UNSCALED;
+    tileX = GLOBALS::player.x / TILE_WIDTH_PIXELS_UNSCALED;
+    tileIndex = (tileY * LEVEL_WIDTH_TILES) + tileX;
+    if (level1MapData.codes[tileIndex] == eCODE_DEATH)
+        return true;
+
+    // upper-right corner of player
+    tileX = (GLOBALS::player.x + PLAYER_WIDTH_PIXELS_UNSCALED - 1) / TILE_WIDTH_PIXELS_UNSCALED;
+    tileIndex = (tileY * LEVEL_WIDTH_TILES) + tileX;
+    if (level1MapData.codes[tileIndex] == eCODE_DEATH)
+        return true;
+
+    // lower-left corner of player
+    tileY = (GLOBALS::player.y + TILE_HEIGHT_PIXELS_UNSCALED - 1) / TILE_HEIGHT_PIXELS_UNSCALED;
+    tileX = GLOBALS::player.x / TILE_WIDTH_PIXELS_UNSCALED;
+    tileIndex = (tileY * LEVEL_WIDTH_TILES) + tileX;
+    if (level1MapData.codes[tileIndex] == eCODE_DEATH)
+        return true;
+
+    // lower-right corner of player
+    tileX = (GLOBALS::player.x + PLAYER_WIDTH_PIXELS_UNSCALED - 1) / TILE_WIDTH_PIXELS_UNSCALED;
+    tileIndex = (tileY * LEVEL_WIDTH_TILES) + tileX;
+    if (level1MapData.codes[tileIndex] == eCODE_DEATH)
+        return true;
+
+    return false;
 }

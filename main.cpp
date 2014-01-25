@@ -52,9 +52,6 @@ static const signed int LEVEL_HEIGHT_VIEWPORTS = 2; // two screens high
 static const signed int LEVEL_WIDTH_TILES  = LEVEL_WIDTH_VIEWPORTS  * VIEWPORT_WIDTH_TILES;
 static const signed int LEVEL_HEIGHT_TILES = LEVEL_HEIGHT_VIEWPORTS * VIEWPORT_HEIGHT_TILES;
 
-// how many of the pixels in the player sprite are actually part of the graphic (for more accurate collision detection)
-// assumes player sprite is left-justified in the tile box
-static const signed int PLAYER_WIDTH_PIXELS_UNSCALED = 20;
 static const signed int PLAYER_MAX_JUMP_HEIGHT_UNSCALED = (TILE_HEIGHT_PIXELS_UNSCALED * 2) + (TILE_HEIGHT_PIXELS_UNSCALED / 2);
 
 #ifdef NO_SCALING
@@ -69,6 +66,9 @@ static const signed int LEVEL_HEIGHT_PIXELS_UNSCALED = LEVEL_HEIGHT_TILES * TILE
 
 static const signed int SCREEN_WIDTH_PIXELS_SCALED  = VIEWPORT_WIDTH_PIXELS_UNSCALED  * SCALE_FACTOR;
 static const signed int SCREEN_HEIGHT_PIXELS_SCALED = VIEWPORT_HEIGHT_PIXELS_UNSCALED * SCALE_FACTOR;
+
+// how many seconds is each frame of the player's animation displayed for
+static const double ANIMATION_RATE = 0.25;
 
 /* bit flags for whether a block is 'solid' on a particular surface (e.g. cannot be entered from that side).
     MUST MATCH TileStudio definitions */
@@ -97,10 +97,27 @@ typedef enum _TMapCode
     eCODE_DEATH        = 2
 } TMapCode;
 
-typedef struct _TPlayer
+class TObject
 {
+public:
+    TObject(unsigned int tileID) : m_tileID(tileID) {};
+
+    virtual void Tick(double delta_seconds) {};
+
+    virtual unsigned int TileID() const { return m_tileID; };
+    virtual signed int DrawWidth() const { return TILE_WIDTH_PIXELS_UNSCALED; };
+
     // unscaled
     signed int x, y;
+
+protected:
+    unsigned int m_tileID;
+};
+
+class TMobile : public TObject
+{
+public:
+    TMobile(unsigned int tileID) : TObject(tileID), xVelocity(0), yVelocity(0), jumping(false), jumpedSoFar(0), facing(eFACING_RIGHT) {};
     signed int xVelocity, yVelocity;
 
     // if jumping, how many unscaled pixels up has the player moved so far
@@ -109,7 +126,112 @@ typedef struct _TPlayer
     signed int jumpedSoFar;
 
     TFacing facing;
-} TPlayer;
+};
+
+class TPlayer : public TMobile
+{
+public:
+    TPlayer() : TMobile(366), frameIndex(0), seconds_since_last_frame_change(0.0) {};
+    virtual void Tick(double delta_seconds);
+
+    virtual unsigned int TileID() const;
+    virtual signed int DrawWidth() const;
+
+private:
+    unsigned int frameIndex;
+    double seconds_since_last_frame_change;
+
+    enum
+    {
+        eANIM_STANDING_LEFT = 0,
+        eANIM_STANDING_RIGHT,
+        eANIM_JUMPING_LEFT,
+        eANIM_JUMPING_RIGHT,
+        eANIM_SHOOTING_LEFT,
+        eANIM_SHOOTING_RIGHT,
+
+        // must be last
+        eNUM_PLAYER_ANIMATIONS,
+
+        eFRAMES_PER_ANIMATION = 4
+    };
+
+    static const unsigned int frames[eNUM_PLAYER_ANIMATIONS][eFRAMES_PER_ANIMATION];
+    static const signed int widths[eNUM_PLAYER_ANIMATIONS][eFRAMES_PER_ANIMATION];
+};
+
+
+const unsigned int TPlayer::frames[eNUM_PLAYER_ANIMATIONS][eFRAMES_PER_ANIMATION] =
+{
+    { 389, 390, 391, 392 },
+    { 366, 367, 368, 369 },
+    { 436, 436, 436, 436 },
+    { 435, 435, 435, 435 },
+    { 413, 415, 415, 413 },
+    { 412, 414, 414, 412 }
+};
+
+const signed int TPlayer::widths[eNUM_PLAYER_ANIMATIONS][eFRAMES_PER_ANIMATION] =
+{
+    { 20, 24, 20, 22 },
+    { 20, 24, 20, 22 },
+    { 28, 28, 28, 28 },
+    { 28, 28, 28, 28 },
+    { 20, 32, 32, 20 },
+    { 20, 32, 32, 20 }
+};
+
+
+void TPlayer::Tick(double delta_seconds) 
+{
+    seconds_since_last_frame_change += delta_seconds;
+
+    if (seconds_since_last_frame_change >= ANIMATION_RATE)
+    {
+        frameIndex = (frameIndex + 1) % eFRAMES_PER_ANIMATION;
+        seconds_since_last_frame_change = 0.0;
+    }
+}
+
+unsigned int TPlayer::TileID() const
+{
+    if (facing == eFACING_RIGHT)
+    {
+        if (jumping)
+            return frames[eANIM_JUMPING_RIGHT][frameIndex];
+        else
+            return frames[eANIM_STANDING_RIGHT][frameIndex];
+    }
+    else if (facing == eFACING_LEFT)
+    {
+        if (jumping)
+            return frames[eANIM_JUMPING_LEFT][frameIndex];
+        else
+            return frames[eANIM_STANDING_LEFT][frameIndex];
+    }
+    else
+        assert(false); // unknown state
+}
+
+signed int TPlayer::DrawWidth() const
+{
+    if (facing == eFACING_RIGHT)
+    {
+        if (jumping)
+            return widths[eANIM_JUMPING_RIGHT][frameIndex];
+        else
+            return widths[eANIM_STANDING_RIGHT][frameIndex];
+    }
+    else if (facing == eFACING_LEFT)
+    {
+        if (jumping)
+            return widths[eANIM_JUMPING_LEFT][frameIndex];
+        else
+            return widths[eANIM_STANDING_LEFT][frameIndex];
+    }
+    else
+        assert(false); // unknown state
+}
 
 namespace GLOBALS
 {
@@ -140,8 +262,6 @@ static void CreateBackgroundImage(void);
 static bool OnSolidGround(void);
 static bool CanMoveUp(void);
 static bool InDeathSquare(void);
-
-static unsigned int PlayerTileID(void);
 
 int main(int argc, char **argv)
 {
@@ -270,8 +390,9 @@ void PlayGame(void)
     bool done = false;
     int i;
     ALLEGRO_EVENT event;
-
     bool wants_left = false, wants_right = false, wants_jump = false, wants_fire = false;
+    double time_of_last_frame = al_get_time();
+    double delta_time;
 
     CreateBackgroundImage( /* level number? */ );
 
@@ -344,6 +465,16 @@ void PlayGame(void)
             } /* switch(event type) */
         }
 
+        // Call the ticks here so that animation frames (and therefore drawing widths) are updated prior to allowing movement,
+        // which relying on the drawing widths for bounds-checking
+        // TODO: update each enemy and any shots fired
+
+        delta_time = al_get_time() - time_of_last_frame;
+        time_of_last_frame = al_get_time();
+
+        GLOBALS::player.Tick(delta_time);
+
+
         if (wants_left)
             ProcessAction(eACTION_MOVE_LEFT);
         if (wants_right)
@@ -359,7 +490,6 @@ void PlayGame(void)
             continue;
         }
 
-        // TODO: update each enemy and any shots fired
 
         // player is either jumping or falling
         if (GLOBALS::player.jumping)
@@ -458,7 +588,7 @@ void RedrawScreen(void)
 
     // TODO:
     //    draw all enemies and the player and shots
-    const unsigned int playerTileID = PlayerTileID();
+    const unsigned int playerTileID = GLOBALS::player.TileID();
     const unsigned int atlasWidth_tiles = al_get_bitmap_width(GLOBALS::tileAtlas_unscaled) / TILE_WIDTH_PIXELS_UNSCALED;
     al_draw_scaled_bitmap(GLOBALS::tileAtlas_unscaled,
                                       (playerTileID % atlasWidth_tiles) * TILE_WIDTH_PIXELS_UNSCALED, (playerTileID / atlasWidth_tiles) * TILE_HEIGHT_PIXELS_UNSCALED,
@@ -480,7 +610,10 @@ void RedrawScreen(void)
 
 void ProcessAction(action_t action)
 {
-    int tileX, tileY, i;
+    int tileX, tileYtop, tileYbottom, i;
+
+    tileYtop = GLOBALS::player.y / TILE_HEIGHT_PIXELS_UNSCALED;
+    tileYbottom = (GLOBALS::player.y + TILE_HEIGHT_PIXELS_UNSCALED - 1) / TILE_HEIGHT_PIXELS_UNSCALED;
 
     // IMPORTANT: ALL MOVEMENTS ARE PERFORMED IN THE UNSCALED PIXEL WORLD
     switch (action)
@@ -488,13 +621,13 @@ void ProcessAction(action_t action)
         case eACTION_MOVE_LEFT:
             GLOBALS::player.facing = eFACING_LEFT;
 
-            tileY = (GLOBALS::player.y + (TILE_HEIGHT_PIXELS_UNSCALED / 2)) / TILE_HEIGHT_PIXELS_UNSCALED;
 
             for (i = 0; i < GLOBALS::player.xVelocity; ++i)
             {
                 tileX = max(0, GLOBALS::player.x - 1) / TILE_WIDTH_PIXELS_UNSCALED;
 
-                if (!(level1MapData.bounds[tileY * LEVEL_WIDTH_TILES + tileX] & SOLID_RIGHT))
+                if (!(level1MapData.bounds[tileYtop    * LEVEL_WIDTH_TILES + tileX] & SOLID_RIGHT) &&
+                    !(level1MapData.bounds[tileYbottom * LEVEL_WIDTH_TILES + tileX] & SOLID_RIGHT))
                     GLOBALS::player.x -= 1;
                 else
                     break;
@@ -504,13 +637,12 @@ void ProcessAction(action_t action)
         case eACTION_MOVE_RIGHT:
             GLOBALS::player.facing = eFACING_RIGHT;
 
-            tileY = (GLOBALS::player.y + (TILE_HEIGHT_PIXELS_UNSCALED / 2)) / TILE_HEIGHT_PIXELS_UNSCALED;
-
             for (i = 0; i < GLOBALS::player.xVelocity; ++i)
             {
-                tileX = min(LEVEL_WIDTH_PIXELS_UNSCALED - 1, GLOBALS::player.x + PLAYER_WIDTH_PIXELS_UNSCALED + 1) / TILE_WIDTH_PIXELS_UNSCALED;
+                tileX = min(LEVEL_WIDTH_PIXELS_UNSCALED - 1, GLOBALS::player.x + GLOBALS::player.DrawWidth()) / TILE_WIDTH_PIXELS_UNSCALED;
 
-                if (!(level1MapData.bounds[tileY * LEVEL_WIDTH_TILES + tileX] & SOLID_RIGHT))
+                if (!(level1MapData.bounds[tileYtop    * LEVEL_WIDTH_TILES + tileX] & SOLID_LEFT) &&
+                    !(level1MapData.bounds[tileYbottom * LEVEL_WIDTH_TILES + tileX] & SOLID_LEFT))
                     GLOBALS::player.x += 1;
                 else
                     break;
@@ -602,7 +734,7 @@ bool OnSolidGround(void)
     int tileX = GLOBALS::player.x / TILE_WIDTH_PIXELS_UNSCALED;
 
     // X coord of the right-most column of the player
-    int tileXright = (GLOBALS::player.x + PLAYER_WIDTH_PIXELS_UNSCALED) / TILE_WIDTH_PIXELS_UNSCALED;
+    int tileXright = (GLOBALS::player.x + GLOBALS::player.DrawWidth() - 1) / TILE_WIDTH_PIXELS_UNSCALED;
 
     // the Y coord of the row immediately below the player
     int tileY = (GLOBALS::player.y + TILE_HEIGHT_PIXELS_UNSCALED) / TILE_HEIGHT_PIXELS_UNSCALED;
@@ -621,7 +753,7 @@ bool CanMoveUp(void)
     int tileX = GLOBALS::player.x / TILE_WIDTH_PIXELS_UNSCALED;
 
     // X coord of the right-most column of the player
-    int tileXright = (GLOBALS::player.x + PLAYER_WIDTH_PIXELS_UNSCALED) / TILE_WIDTH_PIXELS_UNSCALED;
+    int tileXright = (GLOBALS::player.x + GLOBALS::player.DrawWidth() - 1) / TILE_WIDTH_PIXELS_UNSCALED;
 
     // the Y coord of the row immediately above the player
     int tileY = (GLOBALS::player.y - 1) / TILE_HEIGHT_PIXELS_UNSCALED;
@@ -714,28 +846,6 @@ bool sprite_collide(const sprite *object1, const sprite *object2)
 }
 #endif
 
-unsigned int PlayerTileID(void)
-{
-    if (GLOBALS::player.facing == eFACING_LEFT)
-    {
-        if (GLOBALS::player.jumping)
-            return 436;
-        else
-            return 389;
-    }
-    else if (GLOBALS::player.facing == eFACING_RIGHT)
-    {
-        if (GLOBALS::player.jumping)
-            return 435;
-        else
-            return 366;
-    }
-    else
-    {
-        // unexpected facing direction
-        assert(false);
-    }
-}
 
 void ResetLevel(void)
 {
@@ -773,7 +883,7 @@ bool InDeathSquare(void)
         return true;
 
     // upper-right corner of player
-    tileX = (GLOBALS::player.x + PLAYER_WIDTH_PIXELS_UNSCALED - 1) / TILE_WIDTH_PIXELS_UNSCALED;
+    tileX = (GLOBALS::player.x + GLOBALS::player.DrawWidth() - 1) / TILE_WIDTH_PIXELS_UNSCALED;
     tileIndex = (tileY * LEVEL_WIDTH_TILES) + tileX;
     if (level1MapData.codes[tileIndex] == eCODE_DEATH)
         return true;
@@ -786,7 +896,7 @@ bool InDeathSquare(void)
         return true;
 
     // lower-right corner of player
-    tileX = (GLOBALS::player.x + PLAYER_WIDTH_PIXELS_UNSCALED - 1) / TILE_WIDTH_PIXELS_UNSCALED;
+    tileX = (GLOBALS::player.x + GLOBALS::player.DrawWidth() - 1) / TILE_WIDTH_PIXELS_UNSCALED;
     tileIndex = (tileY * LEVEL_WIDTH_TILES) + tileX;
     if (level1MapData.codes[tileIndex] == eCODE_DEATH)
         return true;

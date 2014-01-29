@@ -80,4 +80,30 @@ public:
     virtual bool CollidedWith(TObject &obj);
 };
 
+class TSatelliteDish : public TObject
+{
+public:
+	TSatelliteDish(signed int x, signed int y) : TObject(357, x, y), m_frameIndex(0), m_seconds_since_last_frame_change(0.0), m_timesShot(0) {};
+    virtual void Tick(double delta_seconds);
+
+    virtual bool CollidedWith(TObject &obj);
+
+    virtual unsigned int TileID() const;
+    virtual signed int DrawWidth() const;
+
+private:
+	enum /* class-static definitions */
+	{
+		eFRAMES_PER_ANIMATION = 4
+	};
+
+    unsigned int m_frameIndex;
+    double m_seconds_since_last_frame_change;
+    
+    unsigned int m_timesShot;
+
+    static const unsigned int frames[eFRAMES_PER_ANIMATION];
+    static const signed int widths[eFRAMES_PER_ANIMATION];
+};
+
 #endif

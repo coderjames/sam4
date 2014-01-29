@@ -83,7 +83,7 @@ typedef enum _TMapCode
     eCODE_TNT                = 5,
     eCODE_PUSHABLE           = 6,
     eCODE_AMMO               = 7,
-    eCODE_SATELLITE          = 8,
+    eCODE_SATELLITE_DISH     = 8,
 
     eCODE_USE_TNT            = 9   /* this code is placed immediately adjacent to the exit door, where TNT can be used */
 } TMapCode;

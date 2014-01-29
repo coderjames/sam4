@@ -17,12 +17,12 @@ const unsigned int TPlayer::frames[eNUM_PLAYER_ANIMATIONS][eFRAMES_PER_ANIMATION
 
 const signed int TPlayer::widths[eNUM_PLAYER_ANIMATIONS][eFRAMES_PER_ANIMATION] =
 {
-    { 24, 24, 24, 24 },
-    { 24, 24, 24, 24 },
-    { 28, 28, 28, 28 },
-    { 28, 28, 28, 28 },
-    { 20, 32, 32, 20 },
-    { 20, 32, 32, 20 }
+    { 22, 22, 22, 22 }, /* standing left  */
+    { 22, 22, 22, 22 }, /* standing right */
+    { 28, 28, 28, 28 }, /* jumping left   */
+    { 28, 28, 28, 28 }, /* jumping right  */
+    { 20, 32, 32, 20 }, /* shooting left  */
+    { 20, 32, 32, 20 }  /* shooting right */
 };
 
 void TPlayer::Tick(double delta_seconds) 
@@ -121,4 +121,47 @@ bool TGlasses::CollidedWith(TObject &obj)
     }
 
     return false;
+}
+
+
+
+const unsigned int TSatelliteDish::frames[eFRAMES_PER_ANIMATION] = {357, 358, 357, 359}; /* center, right, center, left */
+const   signed int TSatelliteDish::widths[eFRAMES_PER_ANIMATION] = {TILE_WIDTH_PIXELS_UNSCALED, TILE_WIDTH_PIXELS_UNSCALED, TILE_WIDTH_PIXELS_UNSCALED, TILE_WIDTH_PIXELS_UNSCALED};
+
+void TSatelliteDish::Tick(double delta_seconds)
+{
+	m_seconds_since_last_frame_change += delta_seconds;
+
+	if (m_seconds_since_last_frame_change >= 0.33)
+	{
+		m_frameIndex = (m_frameIndex + 1) % eFRAMES_PER_ANIMATION;
+		m_seconds_since_last_frame_change = 0.0;
+	}
+}
+
+bool TSatelliteDish::CollidedWith(TObject &obj)
+{
+	/*
+	if (obj == player's bullet)
+		++m_timeShot;
+
+		if (m_timesShot >= hit points)
+			remove from level
+			give player points
+			record that dish is destroyed, so player is allowed to exit
+			return true;
+	*/
+
+	return false;
+}
+
+
+unsigned int TSatelliteDish::TileID() const
+{
+    return frames[m_frameIndex];
+}
+
+signed int TSatelliteDish::DrawWidth() const
+{
+    return widths[m_frameIndex];
 }

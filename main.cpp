@@ -49,7 +49,7 @@ const signed int SCREEN_WIDTH_PIXELS_SCALED  = VIEWPORT_WIDTH_PIXELS_UNSCALED  *
 const signed int SCREEN_HEIGHT_PIXELS_SCALED = VIEWPORT_HEIGHT_PIXELS_UNSCALED * SCALE_FACTOR;
 
 // how many seconds is each frame of the player's animation displayed for
-const double ANIMATION_RATE = 0.25;
+const double ANIMATION_RATE = 0.125;
 
 
 namespace GLOBALS
@@ -123,7 +123,7 @@ bool InitGame(int argc, char **argv)
         return false;
     }
 
-    //al_set_physfs_file_interface();
+    al_set_physfs_file_interface();
     
     if (!al_install_keyboard())
         return false;
@@ -282,9 +282,7 @@ void PlayGame(void)
         }
 
         // Call the ticks here so that animation frames (and therefore drawing widths) are updated prior to allowing movement,
-        // which relying on the drawing widths for bounds-checking
-        // TODO: update each enemy and any shots fired
-
+        // which relying on the drawing widths for bounds-checking 
         delta_time = al_get_time() - time_of_last_frame;
         time_of_last_frame = al_get_time();
 
@@ -306,7 +304,6 @@ void PlayGame(void)
 
 
         // check for collisions
-
         for (std::list<TObject *>::iterator it = GLOBALS::interactives.begin(); it != GLOBALS::interactives.end(); ++it)
         {
             assert(*it);
@@ -436,8 +433,6 @@ void RedrawScreen(void)
                                                       0, 0, /* dest x, y */
                                                       0);
 
-    // TODO:
-    //    draw all enemies and the player and shots
     const unsigned int playerTileID = GLOBALS::player.TileID();
     const unsigned int atlasWidth_tiles = al_get_bitmap_width(GLOBALS::tileAtlas_unscaled) / TILE_WIDTH_PIXELS_UNSCALED;
     al_draw_scaled_bitmap(GLOBALS::tileAtlas_unscaled,
@@ -446,7 +441,30 @@ void RedrawScreen(void)
                                       (GLOBALS::player.m_x - worldX) * SCALE_FACTOR, (GLOBALS::player.m_y - worldY) * SCALE_FACTOR,
                                       TILE_WIDTH_PIXELS_UNSCALED * SCALE_FACTOR, TILE_HEIGHT_PIXELS_UNSCALED * SCALE_FACTOR,
                                       0);
+
+    unsigned int tileID;
+    signed int drawWidth, x, y;
+    for (std::list<TObject *>::iterator it = GLOBALS::interactives.begin(); it != GLOBALS::interactives.end(); ++it)
+    {
+        assert(*it);
+
+        tileID = (*it)->TileID();
+        x = (*it)->m_x;
+        y = (*it)->m_y;
+
+        // only draw the thing if it is currently on the screen
+        if (((x - worldX) * SCALE_FACTOR) < SCREEN_WIDTH_PIXELS_SCALED)
+            al_draw_scaled_bitmap(GLOBALS::tileAtlas_unscaled,
+                                  (tileID % atlasWidth_tiles) * TILE_WIDTH_PIXELS_UNSCALED, (tileID / atlasWidth_tiles) * TILE_HEIGHT_PIXELS_UNSCALED,
+                                  TILE_WIDTH_PIXELS_UNSCALED, TILE_HEIGHT_PIXELS_UNSCALED,
+                                  (x - worldX) * SCALE_FACTOR, (y - worldY) * SCALE_FACTOR,
+                                  TILE_WIDTH_PIXELS_UNSCALED * SCALE_FACTOR, TILE_HEIGHT_PIXELS_UNSCALED * SCALE_FACTOR,
+                                  0);        
+    }
+
+    // TODO:
     //    copy appropriate region of foreground bitmap to screen (eventually, if there is one)
+
 
     // display some debugging information
 #if 0
@@ -736,13 +754,13 @@ void ResetLevel(void)
                 printf("\nDBUG: spawned player at (%d, %d)", x, y);
                 break;
 
+            case eCODE_INVISIBLE_PLATFORM:
+                // nothing - handled when glasses are picked up
+                break;
+
             case eCODE_GLASSES:
                 GLOBALS::interactives.push_back(new TGlasses(x,y));
                 printf("\nDBUG: created glasses at (%d, %d)", x, y);
-                break;
-
-            case eCODE_INVISIBLE_PLATFORM:
-                // nothing - handled when glasses are picked up
                 break;
 
             case eCODE_TNT:
@@ -750,7 +768,18 @@ void ResetLevel(void)
                 break;
 
             case eCODE_PUSHABLE:
+                level1MapData.midTiles[i] = -1;
                 // create new pushable interactive with the tile ID of what's in the mid-layer of this square
+                break;
+
+            case eCODE_AMMO:
+                // create new TAmmo interactive
+                break;
+
+            case eCODE_SATELLITE_DISH:
+                level1MapData.midTiles[i] = -1;
+                GLOBALS::interactives.push_back(new TSatelliteDish(x,y));
+                printf("\nDBUG: created satellite dish at (%d, %d)", x, y);
                 break;
         }
     }

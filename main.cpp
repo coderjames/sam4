@@ -2,6 +2,7 @@
 #include <cstdlib>     /* srand, rand */
 #include <ctime>
 #include <cassert>
+#include <list>
 
 #include <allegro5/allegro.h>
 #include <allegro5/allegro_image.h>
@@ -14,224 +15,42 @@
 
 #include <physfs.h>
 
+#include "sam_shared.hpp"
+
+#include "interactives.hpp"
+
 #include "level1.h"
 
-//#define NO_SCALING
+const char *ORGANIZATION_NAME = "jdooley.org";
+const char *APPLICATION_NAME = "SAM4";
 
-// from: http://stackoverflow.com/questions/3437404/min-and-max-in-c
-// Note: __typeof__ operator may be GCC specific
-#ifndef max
- #define max(a,b) \
-   ({ __typeof__ (a) _a = (a); \
-       __typeof__ (b) _b = (b); \
-     _a > _b ? _a : _b; })
-#endif
+const signed int TILE_WIDTH_PIXELS_UNSCALED  = 32;
+const signed int TILE_HEIGHT_PIXELS_UNSCALED = 32;
 
-#ifndef min
- #define min(a,b) \
-   ({ __typeof__ (a) _a = (a); \
-       __typeof__ (b) _b = (b); \
-     _a < _b ? _a : _b; })
-#endif
+const signed int VIEWPORT_WIDTH_TILES  = 20;
+const signed int VIEWPORT_HEIGHT_TILES = 15;
 
-static const char *ORGANIZATION_NAME = "jdooley.org";
-static const char *APPLICATION_NAME = "SAM4";
+const signed int VIEWPORT_WIDTH_PIXELS_UNSCALED  = VIEWPORT_WIDTH_TILES  * TILE_WIDTH_PIXELS_UNSCALED;
+const signed int VIEWPORT_HEIGHT_PIXELS_UNSCALED = VIEWPORT_HEIGHT_TILES * TILE_HEIGHT_PIXELS_UNSCALED;
 
-static const signed int TILE_WIDTH_PIXELS_UNSCALED  = 32;
-static const signed int TILE_HEIGHT_PIXELS_UNSCALED = 32;
+const signed int LEVEL_WIDTH_VIEWPORTS  = 2; // two screens wide
+const signed int LEVEL_HEIGHT_VIEWPORTS = 2; // two screens high
 
-static const signed int VIEWPORT_WIDTH_TILES  = 20;
-static const signed int VIEWPORT_HEIGHT_TILES = 15;
+const signed int LEVEL_WIDTH_TILES  = LEVEL_WIDTH_VIEWPORTS  * VIEWPORT_WIDTH_TILES;
+const signed int LEVEL_HEIGHT_TILES = LEVEL_HEIGHT_VIEWPORTS * VIEWPORT_HEIGHT_TILES;
 
-static const signed int VIEWPORT_WIDTH_PIXELS_UNSCALED  = VIEWPORT_WIDTH_TILES  * TILE_WIDTH_PIXELS_UNSCALED;
-static const signed int VIEWPORT_HEIGHT_PIXELS_UNSCALED = VIEWPORT_HEIGHT_TILES * TILE_HEIGHT_PIXELS_UNSCALED;
+const signed int PLAYER_MAX_JUMP_HEIGHT_UNSCALED = (TILE_HEIGHT_PIXELS_UNSCALED * 2) + (TILE_HEIGHT_PIXELS_UNSCALED / 2);
 
-static const signed int LEVEL_WIDTH_VIEWPORTS  = 2; // two screens wide
-static const signed int LEVEL_HEIGHT_VIEWPORTS = 2; // two screens high
+const signed int LEVEL_WIDTH_PIXELS_UNSCALED  = LEVEL_WIDTH_TILES  * TILE_WIDTH_PIXELS_UNSCALED;
+const signed int LEVEL_HEIGHT_PIXELS_UNSCALED = LEVEL_HEIGHT_TILES * TILE_HEIGHT_PIXELS_UNSCALED;
 
-static const signed int LEVEL_WIDTH_TILES  = LEVEL_WIDTH_VIEWPORTS  * VIEWPORT_WIDTH_TILES;
-static const signed int LEVEL_HEIGHT_TILES = LEVEL_HEIGHT_VIEWPORTS * VIEWPORT_HEIGHT_TILES;
-
-static const signed int PLAYER_MAX_JUMP_HEIGHT_UNSCALED = (TILE_HEIGHT_PIXELS_UNSCALED * 2) + (TILE_HEIGHT_PIXELS_UNSCALED / 2);
-
-#ifdef NO_SCALING
-static const signed int SCALE_FACTOR = 1;
-#else
-static const signed int SCALE_FACTOR = 2;
-#endif
-
-// scaled
-static const signed int LEVEL_WIDTH_PIXELS_UNSCALED  = LEVEL_WIDTH_TILES  * TILE_WIDTH_PIXELS_UNSCALED;
-static const signed int LEVEL_HEIGHT_PIXELS_UNSCALED = LEVEL_HEIGHT_TILES * TILE_HEIGHT_PIXELS_UNSCALED;
-
-static const signed int SCREEN_WIDTH_PIXELS_SCALED  = VIEWPORT_WIDTH_PIXELS_UNSCALED  * SCALE_FACTOR;
-static const signed int SCREEN_HEIGHT_PIXELS_SCALED = VIEWPORT_HEIGHT_PIXELS_UNSCALED * SCALE_FACTOR;
+const signed int SCALE_FACTOR = 2;
+const signed int SCREEN_WIDTH_PIXELS_SCALED  = VIEWPORT_WIDTH_PIXELS_UNSCALED  * SCALE_FACTOR;
+const signed int SCREEN_HEIGHT_PIXELS_SCALED = VIEWPORT_HEIGHT_PIXELS_UNSCALED * SCALE_FACTOR;
 
 // how many seconds is each frame of the player's animation displayed for
-static const double ANIMATION_RATE = 0.25;
+const double ANIMATION_RATE = 0.25;
 
-/* bit flags for whether a block is 'solid' on a particular surface (e.g. cannot be entered from that side).
-    MUST MATCH TileStudio definitions */
-#define SOLID_TOP     (1 << 0)
-#define SOLID_LEFT    (1 << 1)
-#define SOLID_BOTTOM  (1 << 2)
-#define SOLID_RIGHT   (1 << 3)
-
-typedef enum
-{
-    eACTION_MOVE_LEFT   = 0,
-    eACTION_MOVE_RIGHT  = 1,
-    eACTION_JUMP        = 2,
-    eACTION_FIRE        = 3,
-} action_t;
-
-typedef enum _TFacing
-{
-    eFACING_LEFT = 0,
-    eFACING_RIGHT = 1
-} TFacing;
-
-typedef enum _TMapCode
-{
-    eCODE_PLAYER_SPAWN = 1,
-    eCODE_DEATH        = 2
-} TMapCode;
-
-class TObject
-{
-public:
-    TObject(unsigned int tileID) : m_tileID(tileID) {};
-
-    virtual void Tick(double delta_seconds) {};
-
-    virtual unsigned int TileID() const { return m_tileID; };
-    virtual signed int DrawWidth() const { return TILE_WIDTH_PIXELS_UNSCALED; };
-
-    // unscaled
-    signed int x, y;
-
-protected:
-    unsigned int m_tileID;
-};
-
-class TMobile : public TObject
-{
-public:
-    TMobile(unsigned int tileID) : TObject(tileID), xVelocity(0), yVelocity(0), jumping(false), jumpedSoFar(0), facing(eFACING_RIGHT) {};
-    signed int xVelocity, yVelocity;
-
-    // if jumping, how many unscaled pixels up has the player moved so far
-    // (stop jumping when this reaches the limit of how far to jump)
-    bool jumping;
-    signed int jumpedSoFar;
-
-    TFacing facing;
-};
-
-class TPlayer : public TMobile
-{
-public:
-    TPlayer() : TMobile(366), frameIndex(0), seconds_since_last_frame_change(0.0) {};
-    virtual void Tick(double delta_seconds);
-
-    virtual unsigned int TileID() const;
-    virtual signed int DrawWidth() const;
-
-private:
-    unsigned int frameIndex;
-    double seconds_since_last_frame_change;
-
-    enum
-    {
-        eANIM_STANDING_LEFT = 0,
-        eANIM_STANDING_RIGHT,
-        eANIM_JUMPING_LEFT,
-        eANIM_JUMPING_RIGHT,
-        eANIM_SHOOTING_LEFT,
-        eANIM_SHOOTING_RIGHT,
-
-        // must be last
-        eNUM_PLAYER_ANIMATIONS,
-
-        eFRAMES_PER_ANIMATION = 4
-    };
-
-    static const unsigned int frames[eNUM_PLAYER_ANIMATIONS][eFRAMES_PER_ANIMATION];
-    static const signed int widths[eNUM_PLAYER_ANIMATIONS][eFRAMES_PER_ANIMATION];
-};
-
-
-const unsigned int TPlayer::frames[eNUM_PLAYER_ANIMATIONS][eFRAMES_PER_ANIMATION] =
-{
-    { 389, 390, 391, 392 },
-    { 366, 367, 368, 369 },
-    { 436, 436, 436, 436 },
-    { 435, 435, 435, 435 },
-    { 413, 415, 415, 413 },
-    { 412, 414, 414, 412 }
-};
-
-const signed int TPlayer::widths[eNUM_PLAYER_ANIMATIONS][eFRAMES_PER_ANIMATION] =
-{
-    { 20, 24, 20, 22 },
-    { 20, 24, 20, 22 },
-    { 28, 28, 28, 28 },
-    { 28, 28, 28, 28 },
-    { 20, 32, 32, 20 },
-    { 20, 32, 32, 20 }
-};
-
-
-void TPlayer::Tick(double delta_seconds) 
-{
-    seconds_since_last_frame_change += delta_seconds;
-
-    if (seconds_since_last_frame_change >= ANIMATION_RATE)
-    {
-        frameIndex = (frameIndex + 1) % eFRAMES_PER_ANIMATION;
-        seconds_since_last_frame_change = 0.0;
-    }
-}
-
-unsigned int TPlayer::TileID() const
-{
-    if (facing == eFACING_RIGHT)
-    {
-        if (jumping)
-            return frames[eANIM_JUMPING_RIGHT][frameIndex];
-        else
-            return frames[eANIM_STANDING_RIGHT][frameIndex];
-    }
-    else if (facing == eFACING_LEFT)
-    {
-        if (jumping)
-            return frames[eANIM_JUMPING_LEFT][frameIndex];
-        else
-            return frames[eANIM_STANDING_LEFT][frameIndex];
-    }
-    else
-        assert(false); // unknown state
-}
-
-signed int TPlayer::DrawWidth() const
-{
-    if (facing == eFACING_RIGHT)
-    {
-        if (jumping)
-            return widths[eANIM_JUMPING_RIGHT][frameIndex];
-        else
-            return widths[eANIM_STANDING_RIGHT][frameIndex];
-    }
-    else if (facing == eFACING_LEFT)
-    {
-        if (jumping)
-            return widths[eANIM_JUMPING_LEFT][frameIndex];
-        else
-            return widths[eANIM_STANDING_LEFT][frameIndex];
-    }
-    else
-        assert(false); // unknown state
-}
 
 namespace GLOBALS
 {
@@ -243,6 +62,7 @@ namespace GLOBALS
     ALLEGRO_BITMAP *background_scaled;
 
     TPlayer player;
+    std::list<TObject *> interactives;
 }
 
 /* create a wrapper to throw away the int return value of PHYSFS_deinit() */
@@ -254,14 +74,8 @@ static void DoMainMenu(void);
 static void PlayGame(void);
 static void ShutdownGame(void);
 static void ResetLevel(void);
-
-static void RedrawScreen(void);
 static void ProcessAction(action_t action);
-static void CreateBackgroundImage(void);
 
-static bool OnSolidGround(void);
-static bool CanMoveUp(void);
-static bool InDeathSquare(void);
 
 int main(int argc, char **argv)
 {
@@ -309,7 +123,7 @@ bool InitGame(int argc, char **argv)
         return false;
     }
 
-    al_set_physfs_file_interface();
+    //al_set_physfs_file_interface();
     
     if (!al_install_keyboard())
         return false;
@@ -331,19 +145,13 @@ bool InitGame(int argc, char **argv)
     if (!al_init_image_addon())
         return false;
 
-//#ifndef NO_SCALING
     al_set_new_display_flags(ALLEGRO_FULLSCREEN | ALLEGRO_OPENGL | ALLEGRO_OPENGL_3_0);
-//#endif
 
     al_set_new_display_option(ALLEGRO_COMPATIBLE_DISPLAY, 1, ALLEGRO_REQUIRE);
     al_set_new_display_option(ALLEGRO_CAN_DRAW_INTO_BITMAP, 1, ALLEGRO_REQUIRE);
     al_set_new_display_option(ALLEGRO_RENDER_METHOD, 1, ALLEGRO_REQUIRE);
     
-#ifdef NO_SCALING
-    GLOBALS::display = al_create_display(VIEWPORT_WIDTH_PIXELS, VIEWPORT_HEIGHT_PIXELS);
-#else
     GLOBALS::display = al_create_display(1920, 1080);
-#endif
 
     if (GLOBALS::display == NULL)
         return false;
@@ -365,11 +173,17 @@ bool InitGame(int argc, char **argv)
     // If they get replaced in the future with natively 32x32 tiles, this initial prescaling would be removed.
     ALLEGRO_BITMAP *tileAtlas_temp = al_load_bitmap("tiles.png");
     if (tileAtlas_temp == NULL)
+    {
+        fprintf(stderr, "\nERROR: unable to load tilesheet.\n");
         return false;
+    }
     
     GLOBALS::tileAtlas_unscaled = al_create_bitmap(al_get_bitmap_width(tileAtlas_temp) * 2, al_get_bitmap_height(tileAtlas_temp) * 2);
     if (GLOBALS::tileAtlas_unscaled == NULL)
+    {
+        fprintf(stderr, "\nERROR: unable to create scaled tilesheet");
         return false;
+    }
 
     al_set_target_bitmap(GLOBALS::tileAtlas_unscaled);
     al_draw_scaled_bitmap(tileAtlas_temp,
@@ -391,6 +205,8 @@ void PlayGame(void)
     int i;
     ALLEGRO_EVENT event;
     bool wants_left = false, wants_right = false, wants_jump = false, wants_fire = false;
+    bool remove;
+    std::list<TObject *>::iterator it_remover;
     double time_of_last_frame = al_get_time();
     double delta_time;
 
@@ -473,7 +289,11 @@ void PlayGame(void)
         time_of_last_frame = al_get_time();
 
         GLOBALS::player.Tick(delta_time);
-
+        for (std::list<TObject *>::iterator it = GLOBALS::interactives.begin(); it != GLOBALS::interactives.end(); ++it)
+        {
+            assert(*it);
+            (*it)->Tick(delta_time);
+        }
 
         if (wants_left)
             ProcessAction(eACTION_MOVE_LEFT);
@@ -484,6 +304,36 @@ void PlayGame(void)
         if (wants_jump)
             ProcessAction(eACTION_JUMP);
 
+
+        // check for collisions
+
+        for (std::list<TObject *>::iterator it = GLOBALS::interactives.begin(); it != GLOBALS::interactives.end(); ++it)
+        {
+            assert(*it);
+
+            if (ObjectCollide(*it, &(GLOBALS::player)))
+            {                
+                remove = (*it)->CollidedWith(GLOBALS::player);
+
+                if (remove)
+                {
+                    // remove the object from the interactives list. It was a one-shot interaction
+                    it_remover = it;
+                    --it; // back up the iterator, since it will be incremented by the for() loop
+                          // after this, it points to the item before it_remover.
+                    GLOBALS::interactives.erase(it_remover);
+                          // now it_remover (the colliding object) has been removed from the list
+                          // so when the for() loop increments the iterator, it will point to the
+                          // item after colliding object that was just removed from the list
+                    delete (*it_remover);
+                }
+            }
+
+            //if (there is an active shot)
+                // if it collided with the object
+                    // call CollidedWith(shot)
+        }
+
         if (InDeathSquare())
         {
             ResetLevel();
@@ -492,29 +342,29 @@ void PlayGame(void)
 
 
         // player is either jumping or falling
-        if (GLOBALS::player.jumping)
+        if (GLOBALS::player.m_jumping)
         {
-            for (i = 0; i < GLOBALS::player.yVelocity; ++i)
+            for (i = 0; i < GLOBALS::player.m_yVelocity; ++i)
             {
                 if (CanMoveUp())
                 {
-                    GLOBALS::player.y -= 1;
-                    GLOBALS::player.jumpedSoFar += 1;
+                    GLOBALS::player.m_y -= 1;
+                    GLOBALS::player.m_jumpedSoFar += 1;
 
-                    if (GLOBALS::player.jumpedSoFar >= PLAYER_MAX_JUMP_HEIGHT_UNSCALED)
-                        GLOBALS::player.jumping = false;
+                    if (GLOBALS::player.m_jumpedSoFar >= PLAYER_MAX_JUMP_HEIGHT_UNSCALED)
+                        GLOBALS::player.m_jumping = false;
                 }
                 else // solid blocks above
-                    GLOBALS::player.jumping = false;
+                    GLOBALS::player.m_jumping = false;
             }
         }
         else // try to apply gravity
         {
-            for (i = 0; i < GLOBALS::player.yVelocity; ++i)
+            for (i = 0; i < GLOBALS::player.m_yVelocity; ++i)
             {
                 if (!OnSolidGround())
                 {
-                    GLOBALS::player.y += 1;
+                    GLOBALS::player.m_y += 1;
                 }
             }
         }
@@ -563,8 +413,8 @@ void RedrawScreen(void)
     // regions:
 
     //   - player is in middle of level (so enough left and right to center about player)
-    worldX = (GLOBALS::player.x + (TILE_WIDTH_PIXELS_UNSCALED / 2)) - (VIEWPORT_WIDTH_PIXELS_UNSCALED / 2);
-    worldY = (GLOBALS::player.y + (TILE_HEIGHT_PIXELS_UNSCALED / 2)) - (VIEWPORT_HEIGHT_PIXELS_UNSCALED / 2);
+    worldX = (GLOBALS::player.m_x + (TILE_WIDTH_PIXELS_UNSCALED / 2)) - (VIEWPORT_WIDTH_PIXELS_UNSCALED / 2);
+    worldY = (GLOBALS::player.m_y + (TILE_HEIGHT_PIXELS_UNSCALED / 2)) - (VIEWPORT_HEIGHT_PIXELS_UNSCALED / 2);
 
     //   - player is too far left to center level (not enough world to the left of the player)
     if (worldX < 0)
@@ -593,16 +443,16 @@ void RedrawScreen(void)
     al_draw_scaled_bitmap(GLOBALS::tileAtlas_unscaled,
                                       (playerTileID % atlasWidth_tiles) * TILE_WIDTH_PIXELS_UNSCALED, (playerTileID / atlasWidth_tiles) * TILE_HEIGHT_PIXELS_UNSCALED,
                                       TILE_WIDTH_PIXELS_UNSCALED, TILE_HEIGHT_PIXELS_UNSCALED,
-                                      (GLOBALS::player.x - worldX) * SCALE_FACTOR, (GLOBALS::player.y - worldY) * SCALE_FACTOR,
+                                      (GLOBALS::player.m_x - worldX) * SCALE_FACTOR, (GLOBALS::player.m_y - worldY) * SCALE_FACTOR,
                                       TILE_WIDTH_PIXELS_UNSCALED * SCALE_FACTOR, TILE_HEIGHT_PIXELS_UNSCALED * SCALE_FACTOR,
                                       0);
     //    copy appropriate region of foreground bitmap to screen (eventually, if there is one)
 
     // display some debugging information
-#if 1
+#if 0
     al_draw_textf(GLOBALS::defaultFont, al_map_rgb(255,255,255), TILE_WIDTH_PIXELS_UNSCALED * SCALE_FACTOR, TILE_HEIGHT_PIXELS_UNSCALED, 0,
                   "onGround(%d) canMoveUp(%d), jumping(%d)",
-                  OnSolidGround(), CanMoveUp(), GLOBALS::player.jumping);
+                  OnSolidGround(), CanMoveUp(), GLOBALS::player.m_jumping);
 #endif
 
     al_flip_display();
@@ -612,48 +462,48 @@ void ProcessAction(action_t action)
 {
     int tileX, tileYtop, tileYbottom, i;
 
-    tileYtop = GLOBALS::player.y / TILE_HEIGHT_PIXELS_UNSCALED;
-    tileYbottom = (GLOBALS::player.y + TILE_HEIGHT_PIXELS_UNSCALED - 1) / TILE_HEIGHT_PIXELS_UNSCALED;
+    tileYtop = GLOBALS::player.m_y / TILE_HEIGHT_PIXELS_UNSCALED;
+    tileYbottom = (GLOBALS::player.m_y + TILE_HEIGHT_PIXELS_UNSCALED - 1) / TILE_HEIGHT_PIXELS_UNSCALED;
 
     // IMPORTANT: ALL MOVEMENTS ARE PERFORMED IN THE UNSCALED PIXEL WORLD
     switch (action)
     {
         case eACTION_MOVE_LEFT:
-            GLOBALS::player.facing = eFACING_LEFT;
+            GLOBALS::player.m_facing = eFACING_LEFT;
 
 
-            for (i = 0; i < GLOBALS::player.xVelocity; ++i)
+            for (i = 0; i < GLOBALS::player.m_xVelocity; ++i)
             {
-                tileX = max(0, GLOBALS::player.x - 1) / TILE_WIDTH_PIXELS_UNSCALED;
+                tileX = max(0, GLOBALS::player.m_x - 1) / TILE_WIDTH_PIXELS_UNSCALED;
 
                 if (!(level1MapData.bounds[tileYtop    * LEVEL_WIDTH_TILES + tileX] & SOLID_RIGHT) &&
                     !(level1MapData.bounds[tileYbottom * LEVEL_WIDTH_TILES + tileX] & SOLID_RIGHT))
-                    GLOBALS::player.x -= 1;
+                    GLOBALS::player.m_x -= 1;
                 else
                     break;
             }
             break;
 
         case eACTION_MOVE_RIGHT:
-            GLOBALS::player.facing = eFACING_RIGHT;
+            GLOBALS::player.m_facing = eFACING_RIGHT;
 
-            for (i = 0; i < GLOBALS::player.xVelocity; ++i)
+            for (i = 0; i < GLOBALS::player.m_xVelocity; ++i)
             {
-                tileX = min(LEVEL_WIDTH_PIXELS_UNSCALED - 1, GLOBALS::player.x + GLOBALS::player.DrawWidth()) / TILE_WIDTH_PIXELS_UNSCALED;
+                tileX = min(LEVEL_WIDTH_PIXELS_UNSCALED - 1, GLOBALS::player.m_x + GLOBALS::player.DrawWidth()) / TILE_WIDTH_PIXELS_UNSCALED;
 
                 if (!(level1MapData.bounds[tileYtop    * LEVEL_WIDTH_TILES + tileX] & SOLID_LEFT) &&
                     !(level1MapData.bounds[tileYbottom * LEVEL_WIDTH_TILES + tileX] & SOLID_LEFT))
-                    GLOBALS::player.x += 1;
+                    GLOBALS::player.m_x += 1;
                 else
                     break;
             }
             break;
 
         case eACTION_JUMP:
-            if (!GLOBALS::player.jumping && OnSolidGround())
+            if ((!GLOBALS::player.m_jumping) && OnSolidGround())
             {
-                GLOBALS::player.jumping = true;
-                GLOBALS::player.jumpedSoFar = 0;
+                GLOBALS::player.m_jumping = true;
+                GLOBALS::player.m_jumpedSoFar = 0;
             }
 
             break;
@@ -727,17 +577,17 @@ void CreateBackgroundImage(void)
 bool OnSolidGround(void)
 {
     // can only possibly be on solid ground on a tile boundary
-    if ((GLOBALS::player.y % TILE_HEIGHT_PIXELS_UNSCALED) != 0)
+    if ((GLOBALS::player.m_y % TILE_HEIGHT_PIXELS_UNSCALED) != 0)
         return false;
 
     // X coord of the left-most column of the player
-    int tileX = GLOBALS::player.x / TILE_WIDTH_PIXELS_UNSCALED;
+    int tileX = GLOBALS::player.m_x / TILE_WIDTH_PIXELS_UNSCALED;
 
     // X coord of the right-most column of the player
-    int tileXright = (GLOBALS::player.x + GLOBALS::player.DrawWidth() - 1) / TILE_WIDTH_PIXELS_UNSCALED;
+    int tileXright = (GLOBALS::player.m_x + GLOBALS::player.DrawWidth() - 1) / TILE_WIDTH_PIXELS_UNSCALED;
 
     // the Y coord of the row immediately below the player
-    int tileY = (GLOBALS::player.y + TILE_HEIGHT_PIXELS_UNSCALED) / TILE_HEIGHT_PIXELS_UNSCALED;
+    int tileY = (GLOBALS::player.m_y + TILE_HEIGHT_PIXELS_UNSCALED) / TILE_HEIGHT_PIXELS_UNSCALED;
 
     // need to check both left- and right-edged tiles below player in case player is straddling two tiles
     // (which is the usual case)
@@ -750,13 +600,13 @@ bool OnSolidGround(void)
 bool CanMoveUp(void)
 {
     // X coord of the left-most column of the player
-    int tileX = GLOBALS::player.x / TILE_WIDTH_PIXELS_UNSCALED;
+    int tileX = GLOBALS::player.m_x / TILE_WIDTH_PIXELS_UNSCALED;
 
     // X coord of the right-most column of the player
-    int tileXright = (GLOBALS::player.x + GLOBALS::player.DrawWidth() - 1) / TILE_WIDTH_PIXELS_UNSCALED;
+    int tileXright = (GLOBALS::player.m_x + GLOBALS::player.DrawWidth() - 1) / TILE_WIDTH_PIXELS_UNSCALED;
 
     // the Y coord of the row immediately above the player
-    int tileY = (GLOBALS::player.y - 1) / TILE_HEIGHT_PIXELS_UNSCALED;
+    int tileY = (GLOBALS::player.m_y - 1) / TILE_HEIGHT_PIXELS_UNSCALED;
 
     // need to check both left- and right-edged tiles above player in case player is straddling two tiles
     // (which is the usual case)
@@ -769,9 +619,14 @@ bool CanMoveUp(void)
 
 // Pixel Perfect collision detector
 // from: https://www.allegro.cc/forums/thread/606547
-#if 0
-bool sprite_collide(const sprite *object1, const sprite *object2)
+bool ObjectCollide(const TObject *object1, const TObject *object2)
 {
+    assert(object1);
+    assert(object2);
+
+    if (object1 == object2)
+        return true;
+
     int left1, left2, over_left;
     int right1, right2, over_right;
     int top1, top2, over_top;
@@ -779,94 +634,136 @@ bool sprite_collide(const sprite *object1, const sprite *object2)
     int over_width, over_height;
     int cx, cy;
     ALLEGRO_COLOR pixel[2];
-    ALLEGRO_COLOR trans = al_map_rgba(0,0,0,0);
+    ALLEGRO_COLOR trans = al_map_rgba(255,0,255,0);
     bool collision = false;
 
-    left1 = object1->x;
-    left2 = object2->x;
-    right1 = object1->x + al_get_bitmap_width(object1->img);
-    right2 = object2->x + al_get_bitmap_width(object2->img);
-    top1 = object1->y;
-    top2 = object2->y;
-    bottom1 = object1->y + al_get_bitmap_height(object1->img);
-    bottom2 = object2->y + al_get_bitmap_height(object2->img);
+    ALLEGRO_BITMAP *obj1_img = BitmapOfTile(object1->TileID());
+    ALLEGRO_BITMAP *obj2_img = BitmapOfTile(object2->TileID());
+
+    assert(obj1_img);
+    assert(obj2_img);
+
+    left1 = object1->m_x;
+    left2 = object2->m_x;
+    right1 = object1->m_x + al_get_bitmap_width(obj1_img);
+    right2 = object2->m_x + al_get_bitmap_width(obj2_img);
+    top1 = object1->m_y;
+    top2 = object2->m_y;
+    bottom1 = object1->m_y + al_get_bitmap_height(obj1_img);
+    bottom2 = object2->m_y + al_get_bitmap_height(obj2_img);
 
 
     // First we'll test if the bounding boxes overlap.
     // If they don't overlap at all, there's no sense in checking further.
-    if(bottom1 < top2) return(false);
-    if(top1 > bottom2) return(false);
-    if(right1 < left2) return(false);
-    if(left1 > right2) return(false);
-
-    // The bounding boxes overlap, so there's a potential collision.
-    // We'll store the location of the actual overlap
-    if(bottom1 > bottom2) over_bottom = bottom2;
-    else over_bottom = bottom1;
-
-    if(top1 < top2) over_top = top2;
-    else over_top = top1;
-
-    if(right1 > right2) over_right = right2;
-    else over_right = right1;
-
-    if(left1 < left2) over_left = left2;
-    else over_left = left1;
-
-    over_height = over_bottom - over_top;
-    over_width = over_right - over_left;
-
-    al_lock_bitmap(object1->img , al_get_bitmap_format(object1->img) , ALLEGRO_LOCK_READONLY);
-    al_lock_bitmap(object2->img , al_get_bitmap_format(object2->img) , ALLEGRO_LOCK_READONLY);
-    // Okay, we found where the overlap occured and we'll now only check within that area for any
-    // collisions.
-    for(cy=0; cy < over_height; cy++)
+    if((bottom1 < top2) ||
+       (top1 > bottom2) ||
+       (right1 < left2) ||
+       (left1 > right2))
     {
-        for(cx=0; cx < over_width; cx++)
-        {
-            // sample a pixel from each object
-            pixel[0] = al_get_pixel(object1->img, (over_left-object1->x)+cx, (over_top-object1->y)+cy);
-            pixel[1] = al_get_pixel(object2->img, (over_left-object2->x)+cx, (over_top-object2->y)+cy);
+        collision = false;
+    }
+    else
+    {
+        // The bounding boxes overlap, so there's a potential collision.
+        // We'll store the location of the actual overlap
+        if(bottom1 > bottom2) over_bottom = bottom2;
+        else over_bottom = bottom1;
 
-            if(memcmp(&pixel[0], &trans, sizeof(trans)) && memcmp(&pixel[1], &trans, sizeof(trans)))
+        if(top1 < top2) over_top = top2;
+        else over_top = top1;
+
+        if(right1 > right2) over_right = right2;
+        else over_right = right1;
+
+        if(left1 < left2) over_left = left2;
+        else over_left = left1;
+
+        over_height = over_bottom - over_top;
+        over_width = over_right - over_left;
+
+        al_lock_bitmap(obj1_img, al_get_bitmap_format(obj1_img), ALLEGRO_LOCK_READONLY);
+        al_lock_bitmap(obj2_img, al_get_bitmap_format(obj2_img), ALLEGRO_LOCK_READONLY);
+        // Okay, we found where the overlap occured and we'll now only check within that area for any
+        // collisions.
+        for(cy=0; cy < over_height; cy++)
+        {
+            for(cx=0; cx < over_width; cx++)
             {
-                collision=true;
-                break;
+                // sample a pixel from each object
+                pixel[0] = al_get_pixel(obj1_img, (over_left-object1->m_x)+cx, (over_top-object1->m_y)+cy);
+                pixel[1] = al_get_pixel(obj2_img, (over_left-object2->m_x)+cx, (over_top-object2->m_y)+cy);
+
+                if((memcmp(&pixel[0], &trans, sizeof(trans)) != 0) &&
+                   (memcmp(&pixel[1], &trans, sizeof(trans)) != 0))
+                {
+                    collision=true;
+                    break;
+                }
             }
+        
+        if(collision)
+            break;
         }
-    
-    if(collision)
-        break;
+
+        al_unlock_bitmap(obj1_img);
+        al_unlock_bitmap(obj2_img);
     }
 
-    al_unlock_bitmap(object1->img);
-    al_unlock_bitmap(object2->img);
+    al_destroy_bitmap(obj1_img);
+    al_destroy_bitmap(obj2_img);
 
     return collision;
 }
-#endif
-
 
 void ResetLevel(void)
 {
     unsigned int i;
+    signed int x, y;
+
+    GLOBALS::interactives.clear();
 
     /* starting tile position is mapcode 1 */
     for (i = 0; i < (LEVEL_HEIGHT_TILES * LEVEL_WIDTH_TILES); ++i)
-        if (level1MapData.codes[i] == eCODE_PLAYER_SPAWN)
+    {
+        x = (i % LEVEL_WIDTH_TILES) * TILE_WIDTH_PIXELS_UNSCALED;
+        y = (i / LEVEL_WIDTH_TILES) * TILE_HEIGHT_PIXELS_UNSCALED;
+
+        switch(level1MapData.codes[i])
         {
-            GLOBALS::player.x = (i % LEVEL_WIDTH_TILES) * TILE_WIDTH_PIXELS_UNSCALED;
-            GLOBALS::player.y = (i / LEVEL_WIDTH_TILES) * TILE_HEIGHT_PIXELS_UNSCALED;
-            break;
+            case eCODE_PLAYER_SPAWN:
+                GLOBALS::player.m_x = x;
+                GLOBALS::player.m_y = y;
+                printf("\nDBUG: spawned player at (%d, %d)", x, y);
+                break;
+
+            case eCODE_GLASSES:
+                GLOBALS::interactives.push_back(new TGlasses(x,y));
+                printf("\nDBUG: created glasses at (%d, %d)", x, y);
+                break;
+
+            case eCODE_INVISIBLE_PLATFORM:
+                // nothing - handled when glasses are picked up
+                break;
+
+            case eCODE_TNT:
+                // create new TTnt interactive
+                break;
+
+            case eCODE_PUSHABLE:
+                // create new pushable interactive with the tile ID of what's in the mid-layer of this square
+                break;
         }
+    }
 
     // unscaled pixels per step
-    GLOBALS::player.xVelocity = 2;
-    GLOBALS::player.yVelocity = 2;
+    GLOBALS::player.m_xVelocity = 2;
+    GLOBALS::player.m_yVelocity = 2;
 
-    GLOBALS::player.jumping = false;
-    GLOBALS::player.jumpedSoFar = 0;
-    GLOBALS::player.facing = eFACING_RIGHT;
+    GLOBALS::player.m_jumping = false;
+    GLOBALS::player.m_jumpedSoFar = 0;
+    GLOBALS::player.m_facing = eFACING_RIGHT;
+
+    CreateBackgroundImage();
 
     RedrawScreen();
 }
@@ -876,30 +773,43 @@ bool InDeathSquare(void)
     unsigned int tileX, tileY, tileIndex;
 
     // upper-left corner of player
-    tileY = GLOBALS::player.y / TILE_HEIGHT_PIXELS_UNSCALED;
-    tileX = GLOBALS::player.x / TILE_WIDTH_PIXELS_UNSCALED;
+    tileY = GLOBALS::player.m_y / TILE_HEIGHT_PIXELS_UNSCALED;
+    tileX = GLOBALS::player.m_x / TILE_WIDTH_PIXELS_UNSCALED;
     tileIndex = (tileY * LEVEL_WIDTH_TILES) + tileX;
     if (level1MapData.codes[tileIndex] == eCODE_DEATH)
         return true;
 
     // upper-right corner of player
-    tileX = (GLOBALS::player.x + GLOBALS::player.DrawWidth() - 1) / TILE_WIDTH_PIXELS_UNSCALED;
+    tileX = (GLOBALS::player.m_x + GLOBALS::player.DrawWidth() - 1) / TILE_WIDTH_PIXELS_UNSCALED;
     tileIndex = (tileY * LEVEL_WIDTH_TILES) + tileX;
     if (level1MapData.codes[tileIndex] == eCODE_DEATH)
         return true;
 
     // lower-left corner of player
-    tileY = (GLOBALS::player.y + TILE_HEIGHT_PIXELS_UNSCALED - 1) / TILE_HEIGHT_PIXELS_UNSCALED;
-    tileX = GLOBALS::player.x / TILE_WIDTH_PIXELS_UNSCALED;
+    tileY = (GLOBALS::player.m_y + TILE_HEIGHT_PIXELS_UNSCALED - 1) / TILE_HEIGHT_PIXELS_UNSCALED;
+    tileX = GLOBALS::player.m_x / TILE_WIDTH_PIXELS_UNSCALED;
     tileIndex = (tileY * LEVEL_WIDTH_TILES) + tileX;
     if (level1MapData.codes[tileIndex] == eCODE_DEATH)
         return true;
 
     // lower-right corner of player
-    tileX = (GLOBALS::player.x + GLOBALS::player.DrawWidth() - 1) / TILE_WIDTH_PIXELS_UNSCALED;
+    tileX = (GLOBALS::player.m_x + GLOBALS::player.DrawWidth() - 1) / TILE_WIDTH_PIXELS_UNSCALED;
     tileIndex = (tileY * LEVEL_WIDTH_TILES) + tileX;
     if (level1MapData.codes[tileIndex] == eCODE_DEATH)
         return true;
 
     return false;
+}
+
+ALLEGRO_BITMAP *BitmapOfTile(unsigned int tileID)
+{
+    unsigned int atlasWidth_tiles = al_get_bitmap_width(GLOBALS::tileAtlas_unscaled) / TILE_WIDTH_PIXELS_UNSCALED;
+
+    ALLEGRO_BITMAP *bmp = al_create_sub_bitmap(GLOBALS::tileAtlas_unscaled,
+                                               (tileID % atlasWidth_tiles) * TILE_WIDTH_PIXELS_UNSCALED, (tileID / atlasWidth_tiles) * TILE_HEIGHT_PIXELS_UNSCALED,
+                                               TILE_WIDTH_PIXELS_UNSCALED, TILE_HEIGHT_PIXELS_UNSCALED);
+
+    assert(bmp);
+
+    return bmp;
 }

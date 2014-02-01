@@ -75,6 +75,7 @@ static void PlayGame(void);
 static void ShutdownGame(void);
 static void ResetLevel(void);
 static void ProcessAction(action_t action);
+static void DrawStatusBar(void);
 
 
 int main(int argc, char **argv)
@@ -433,6 +434,7 @@ void RedrawScreen(void)
                                                       0, 0, /* dest x, y */
                                                       0);
 
+    // draw the player
     const unsigned int playerTileID = GLOBALS::player.TileID();
     const unsigned int atlasWidth_tiles = al_get_bitmap_width(GLOBALS::tileAtlas_unscaled) / TILE_WIDTH_PIXELS_UNSCALED;
     al_draw_scaled_bitmap(GLOBALS::tileAtlas_unscaled,
@@ -442,6 +444,7 @@ void RedrawScreen(void)
                                       TILE_WIDTH_PIXELS_UNSCALED * SCALE_FACTOR, TILE_HEIGHT_PIXELS_UNSCALED * SCALE_FACTOR,
                                       0);
 
+    // and all the interactives
     unsigned int tileID;
     signed int drawWidth, x, y;
     for (std::list<TObject *>::iterator it = GLOBALS::interactives.begin(); it != GLOBALS::interactives.end(); ++it)
@@ -451,15 +454,21 @@ void RedrawScreen(void)
         tileID = (*it)->TileID();
         x = (*it)->m_x;
         y = (*it)->m_y;
+        unsigned int relativeX_unscaled = x - worldX;
+        unsigned int relativeX_scaled = relativeX_unscaled * SCALE_FACTOR;
 
         // only draw the thing if it is currently on the screen
-        if (((x - worldX) * SCALE_FACTOR) < SCREEN_WIDTH_PIXELS_SCALED)
+        if (relativeX_scaled < SCREEN_WIDTH_PIXELS_SCALED)
+        {
+            // TODO: only draw the visible portion, not the whole tile
+
             al_draw_scaled_bitmap(GLOBALS::tileAtlas_unscaled,
                                   (tileID % atlasWidth_tiles) * TILE_WIDTH_PIXELS_UNSCALED, (tileID / atlasWidth_tiles) * TILE_HEIGHT_PIXELS_UNSCALED,
                                   TILE_WIDTH_PIXELS_UNSCALED, TILE_HEIGHT_PIXELS_UNSCALED,
                                   (x - worldX) * SCALE_FACTOR, (y - worldY) * SCALE_FACTOR,
                                   TILE_WIDTH_PIXELS_UNSCALED * SCALE_FACTOR, TILE_HEIGHT_PIXELS_UNSCALED * SCALE_FACTOR,
-                                  0);        
+                                  0);
+        }
     }
 
     // TODO:
@@ -472,6 +481,8 @@ void RedrawScreen(void)
                   "onGround(%d) canMoveUp(%d), jumping(%d)",
                   OnSolidGround(), CanMoveUp(), GLOBALS::player.m_jumping);
 #endif
+
+    DrawStatusBar();
 
     al_flip_display();
 }
@@ -841,4 +852,22 @@ ALLEGRO_BITMAP *BitmapOfTile(unsigned int tileID)
     assert(bmp);
 
     return bmp;
+}
+
+void DrawStatusBar(void)
+{
+    al_draw_filled_rectangle(SCREEN_WIDTH_PIXELS_SCALED, 0, SCREEN_WIDTH_PIXELS_SCALED + (TILE_HEIGHT_PIXELS_UNSCALED * 3 * SCALE_FACTOR), SCREEN_HEIGHT_PIXELS_SCALED, al_map_rgb(10,10,150));
+
+    al_draw_textf(GLOBALS::defaultFont, al_map_rgb(255,255,255), SCREEN_WIDTH_PIXELS_SCALED + (TILE_WIDTH_PIXELS_UNSCALED * SCALE_FACTOR), TILE_HEIGHT_PIXELS_UNSCALED    , 0,
+                  "Score: %d",
+                  GLOBALS::player.Score());
+
+    al_draw_textf(GLOBALS::defaultFont, al_map_rgb(255,255,255), SCREEN_WIDTH_PIXELS_SCALED + (TILE_WIDTH_PIXELS_UNSCALED * SCALE_FACTOR), TILE_HEIGHT_PIXELS_UNSCALED * 2, 0,
+                  "Shots: %d",
+                  GLOBALS::player.Ammo());
+
+    al_draw_textf(GLOBALS::defaultFont, al_map_rgb(255,255,255), SCREEN_WIDTH_PIXELS_SCALED + (TILE_WIDTH_PIXELS_UNSCALED * SCALE_FACTOR), TILE_HEIGHT_PIXELS_UNSCALED * 3, 0,
+                  "Lives: %d",
+                  0);
+
 }

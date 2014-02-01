@@ -37,12 +37,14 @@ public:
 class TPlayer : public TMobile
 {
 public:
-    TPlayer() : TMobile(366, 0, 0), m_frameIndex(0), m_seconds_since_last_frame_change(0.0), m_ammo(0), m_hasTNT(false), m_hasDisk(false), m_animation(eANIM_STANDING_RIGHT) {};
+    TPlayer() : TMobile(366, 0, 0), m_frameIndex(0), m_seconds_since_last_frame_change(0.0), m_ammo(0), m_hasTNT(false), m_hasDisk(false), m_score(0), m_animation(eANIM_STANDING_RIGHT) {};
     virtual void Tick(double delta_seconds);
 
     virtual unsigned int TileID() const;
     virtual signed int DrawWidth() const;
-
+    virtual unsigned int Score() const { return m_score; };
+    virtual unsigned int Ammo() const { return m_ammo; };
+    
 private:
     unsigned int m_frameIndex;
     double m_seconds_since_last_frame_change;
@@ -65,6 +67,7 @@ private:
     unsigned int m_ammo;
     bool m_hasTNT;
     bool m_hasDisk;
+    unsigned int m_score;
 
     TPlayerAnimation m_animation;
 

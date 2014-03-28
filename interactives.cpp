@@ -184,15 +184,6 @@ bool TAmmo::CollidedWith(TObject &obj)
 
 TPushable::TPushable(unsigned int tileID, signed int x, signed int y) : TObject(tileID, x, y)
 {
-	int tileX = x / TILE_WIDTH_PIXELS_UNSCALED;
-    int tileXright = (x + DrawWidth() - 1) / TILE_WIDTH_PIXELS_UNSCALED;
-    int tileY = y / TILE_HEIGHT_PIXELS_UNSCALED;
-
-    // save the existing bounding solids details of the tiles where the pushable is being placed
-    // so that when the pushable is moved from these tiles into different ones, the original
-    // solids can be set back to the correct values.
-    m_boundsLeft = level1MapData.bounds[tileY * LEVEL_WIDTH_TILES + tileX];
-    m_boundsRight = level1MapData.bounds[tileY * LEVEL_WIDTH_TILES + tileXright];
 };
 
 bool TPushable::CollidedWith(TObject &obj)
@@ -205,50 +196,21 @@ bool TPushable::CollidedWith(TObject &obj)
 
     if (&obj == &GLOBALS::player)
     {
-        bool moved = false;
-
-        if (GLOBALS::player.m_x < m_x) // player is on left, trying to push right
+        if ((GLOBALS::player.m_x < m_x) && (GLOBALS::player.m_facing == eFACING_RIGHT)) // player is on left, trying to push right
         {
         	tileXright = (oldX + DrawWidth()) / TILE_WIDTH_PIXELS_UNSCALED;
         	if (!(level1MapData.bounds[tileY * LEVEL_WIDTH_TILES + tileXright] & SOLID_LEFT))
         	{
-        		m_x = GLOBALS::player.m_x + GLOBALS::player.DrawWidth() + 1;
-        		moved = true;
+        		m_x = GLOBALS::player.m_x + GLOBALS::player.DrawWidth();
         	}
         }
-        else if (GLOBALS::player.m_x > m_x) // player is on right, trying to push left
+        else if ((GLOBALS::player.m_x > m_x) && (GLOBALS::player.m_facing == eFACING_LEFT)) // player is on right, trying to push left
         {
         	tileX = (oldX-1) / TILE_WIDTH_PIXELS_UNSCALED;
             if (!(level1MapData.bounds[tileY * LEVEL_WIDTH_TILES + tileX] & SOLID_RIGHT))
             {
             	m_x = GLOBALS::player.m_x - DrawWidth();
-            	moved = true;
             }
-        }
-
-        if (moved)
-        {
-            // compute tileX and tileY for oldX and oldY
-            tileX = oldX / TILE_WIDTH_PIXELS_UNSCALED;
-            tileXright = (oldX + DrawWidth() - 1) / TILE_WIDTH_PIXELS_UNSCALED;
-            tileY = oldY / TILE_HEIGHT_PIXELS_UNSCALED;
-
-            // put boundaries for the old tiles back to their original values
-            level1MapData.bounds[tileY * LEVEL_WIDTH_TILES + tileX]      = m_boundsLeft;
-            level1MapData.bounds[tileY * LEVEL_WIDTH_TILES + tileXright] = m_boundsRight;
-
-            // compute tileX and tileY for m_x and m_y
-            tileX = m_x / TILE_WIDTH_PIXELS_UNSCALED;
-            tileXright = (m_x + DrawWidth() - 1) / TILE_WIDTH_PIXELS_UNSCALED;
-            tileY = m_y / TILE_HEIGHT_PIXELS_UNSCALED;
-
-            // save the boundaries for the new tiles before modifying them
-            m_boundsLeft  = level1MapData.bounds[tileY * LEVEL_WIDTH_TILES + tileX];
-            m_boundsRight = level1MapData.bounds[tileY * LEVEL_WIDTH_TILES + tileXright];
-
-            // set SOLID_TOP bounds in those tiles
-            level1MapData.bounds[tileY * LEVEL_WIDTH_TILES + tileX]      |= SOLID_TOP;
-            level1MapData.bounds[tileY * LEVEL_WIDTH_TILES + tileXright] |= SOLID_TOP;
         }
     }
 

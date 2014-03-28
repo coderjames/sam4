@@ -612,7 +612,8 @@ bool OnSolidGround(void)
     int tileX = GLOBALS::player.m_x / TILE_WIDTH_PIXELS_UNSCALED;
 
     // X coord of the right-most column of the player
-    int tileXright = (GLOBALS::player.m_x + GLOBALS::player.DrawWidth() - 1) / TILE_WIDTH_PIXELS_UNSCALED;
+    int playerXright = (GLOBALS::player.m_x + GLOBALS::player.DrawWidth() - 1);
+    int tileXright = playerXright / TILE_WIDTH_PIXELS_UNSCALED;
 
     // the Y coord of the row immediately below the player
     int tileY = (GLOBALS::player.m_y + TILE_HEIGHT_PIXELS_UNSCALED) / TILE_HEIGHT_PIXELS_UNSCALED;
@@ -622,7 +623,27 @@ bool OnSolidGround(void)
     bool onSolidGround = ((level1MapData.bounds[tileY * LEVEL_WIDTH_TILES + tileX]      & SOLID_TOP) ||
                           (level1MapData.bounds[tileY * LEVEL_WIDTH_TILES + tileXright] & SOLID_TOP));    
 
-    return onSolidGround;
+    bool onPushable = false;
+    signed int x, y, width;
+    for (std::list<TObject *>::iterator it = GLOBALS::interactives.begin(); (it != GLOBALS::interactives.end()) && !onPushable; ++it)
+    {
+        assert(*it);
+        if (dynamic_cast<TPushable*>(*it))
+        {
+            x = (*it)->m_x;
+            y = (*it)->m_y;
+            width = (*it)->DrawWidth();
+
+            if ((y == (GLOBALS::player.m_y + TILE_HEIGHT_PIXELS_UNSCALED)) && /* player just above a Pushable */
+                ((GLOBALS::player.m_x >= x && GLOBALS::player.m_x < (x + width) ) ||   /* player's left side within Pushable */
+                 (playerXright >= x && playerXright < (x + width))))   /* player's right side within Pushable */
+            {
+                onPushable = true;
+            }
+        }
+    }
+
+    return onSolidGround || onPushable;
 }
 
 bool CanMoveUp(void)

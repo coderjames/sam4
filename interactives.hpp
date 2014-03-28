@@ -127,9 +127,6 @@ public:
     TPushable(unsigned int tileID, signed int x, signed int y);
 
     virtual bool CollidedWith(TObject &obj);
-
-private:
-    signed short m_boundsLeft, m_boundsRight;
 };
 
 #endif

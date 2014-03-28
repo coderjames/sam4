@@ -229,7 +229,7 @@ bool TPushable::CollidedWith(TObject &obj)
         if (moved)
         {
             // compute tileX and tileY for oldX and oldY
-        	tileX = oldX / TILE_WIDTH_PIXELS_UNSCALED;
+            tileX = oldX / TILE_WIDTH_PIXELS_UNSCALED;
             tileXright = (oldX + DrawWidth() - 1) / TILE_WIDTH_PIXELS_UNSCALED;
             tileY = oldY / TILE_HEIGHT_PIXELS_UNSCALED;
 
@@ -238,7 +238,7 @@ bool TPushable::CollidedWith(TObject &obj)
             level1MapData.bounds[tileY * LEVEL_WIDTH_TILES + tileXright] = m_boundsRight;
 
             // compute tileX and tileY for m_x and m_y
-        	tileX = m_x / TILE_WIDTH_PIXELS_UNSCALED;
+            tileX = m_x / TILE_WIDTH_PIXELS_UNSCALED;
             tileXright = (m_x + DrawWidth() - 1) / TILE_WIDTH_PIXELS_UNSCALED;
             tileY = m_y / TILE_HEIGHT_PIXELS_UNSCALED;
 

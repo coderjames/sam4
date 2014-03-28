@@ -373,7 +373,7 @@ void PlayGame(void)
 
 void DoTitleScreen(void)
 {
-    // TODO:
+    // TODO: title screen
     //    load title screen bitmap
     //    load title screen music
     //    display bitmap
@@ -386,7 +386,7 @@ void DoTitleScreen(void)
 
 void DoMainMenu(void)
 {
-    // TODO:
+    // TODO: main menu
     //    load title screen bitmap
     //    load title screen music
     //    display bitmap
@@ -446,7 +446,7 @@ void RedrawScreen(void)
 
     // and all the interactives
     unsigned int tileID;
-    signed int drawWidth, x, y;
+    signed int x, y;
     for (std::list<TObject *>::iterator it = GLOBALS::interactives.begin(); it != GLOBALS::interactives.end(); ++it)
     {
         assert(*it);
@@ -471,8 +471,7 @@ void RedrawScreen(void)
         }
     }
 
-    // TODO:
-    //    copy appropriate region of foreground bitmap to screen (eventually, if there is one)
+    // TODO: copy appropriate region of foreground bitmap to screen (eventually, if there is one)
 
 
     // display some debugging information
@@ -770,6 +769,7 @@ void ResetLevel(void)
                 break;
 
             case eCODE_GLASSES:
+                level1MapData.midTiles[i] = -1;
                 GLOBALS::interactives.push_back(new TGlasses(x,y));
                 printf("\nDBUG: created glasses at (%d, %d)", x, y);
                 break;
@@ -779,12 +779,16 @@ void ResetLevel(void)
                 break;
 
             case eCODE_PUSHABLE:
-                level1MapData.midTiles[i] = -1;
                 // create new pushable interactive with the tile ID of what's in the mid-layer of this square
+                GLOBALS::interactives.push_back(new TPushable(level1MapData.midTiles[i], x, y));
+                level1MapData.midTiles[i] = -1;
+                printf("\nDBUG: created pushable at (%d, %d)", x, y);
                 break;
 
             case eCODE_AMMO:
-                // create new TAmmo interactive
+                level1MapData.midTiles[i] = -1;
+                GLOBALS::interactives.push_back(new TAmmo(x,y));
+                printf("\nDBUG: created ammo at (%d, %d)", x, y);
                 break;
 
             case eCODE_SATELLITE_DISH:

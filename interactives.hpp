@@ -42,8 +42,10 @@ public:
 
     virtual unsigned int TileID() const;
     virtual signed int DrawWidth() const;
-    virtual unsigned int Score() const { return m_score; };
-    virtual unsigned int Ammo() const { return m_ammo; };
+    
+    unsigned int Score() const { return m_score; };
+    unsigned int Ammo() const { return m_ammo; };
+    void AddAmmo(unsigned int shots) { m_ammo += shots; };
     
 private:
     unsigned int m_frameIndex;
@@ -107,6 +109,27 @@ private:
 
     static const unsigned int frames[eFRAMES_PER_ANIMATION];
     static const signed int widths[eFRAMES_PER_ANIMATION];
+};
+
+
+class TAmmo : public TObject
+{
+public:
+    TAmmo(signed int x, signed int y) : TObject(354, x, y) {};
+
+    virtual bool CollidedWith(TObject &obj);
+};
+
+
+class TPushable : public TObject
+{
+public:
+    TPushable(unsigned int tileID, signed int x, signed int y);
+
+    virtual bool CollidedWith(TObject &obj);
+
+private:
+    signed short m_boundsLeft, m_boundsRight;
 };
 
 #endif

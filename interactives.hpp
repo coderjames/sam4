@@ -47,6 +47,12 @@ public:
     unsigned int Ammo() const { return m_ammo; };
     void AddAmmo(unsigned int shots) { m_ammo += shots; };
     
+    // class constants
+    enum
+    {
+        m_yVelocityMax = 5
+    };
+
 private:
     unsigned int m_frameIndex;
     double m_seconds_since_last_frame_change;
@@ -72,6 +78,7 @@ private:
     unsigned int m_score;
 
     TPlayerAnimation m_animation;
+
 
     static const unsigned int frames[eNUM_PLAYER_ANIMATIONS][eFRAMES_PER_ANIMATION];
     static const signed int widths[eNUM_PLAYER_ANIMATIONS][eFRAMES_PER_ANIMATION];

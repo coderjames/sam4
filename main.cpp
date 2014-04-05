@@ -342,6 +342,16 @@ void PlayGame(void)
         // player is either jumping or falling
         if (GLOBALS::player.m_jumping)
         {
+            // only increase upward velocity every fourth frame so that the player can jump farther
+            // horizontally before having reaching PLAYER_MAX_JUMP_HEIGHT_UNSCALED without increasing
+            // how high the player can jump
+            if (!(GLOBALS::player.m_jumpedSoFar & 3))
+            {
+                ++(GLOBALS::player.m_yVelocity);
+                if (GLOBALS::player.m_yVelocity >= GLOBALS::player.m_yVelocityMax)
+                    GLOBALS::player.m_yVelocity = GLOBALS::player.m_yVelocityMax;
+            }
+
             for (i = 0; i < GLOBALS::player.m_yVelocity; ++i)
             {
                 if (CanMoveUp())
@@ -350,22 +360,33 @@ void PlayGame(void)
                     GLOBALS::player.m_jumpedSoFar += 1;
 
                     if (GLOBALS::player.m_jumpedSoFar >= PLAYER_MAX_JUMP_HEIGHT_UNSCALED)
+                    {
                         GLOBALS::player.m_jumping = false;
+                        GLOBALS::player.m_yVelocity = 0;
+                    }
                 }
                 else // solid blocks above
+                {
                     GLOBALS::player.m_jumping = false;
+                    GLOBALS::player.m_yVelocity = 0;
+                }
             }
         }
         else // try to apply gravity
         {
-            for (i = 0; i < GLOBALS::player.m_yVelocity; ++i)
+            for (i = 0; (i < GLOBALS::player.m_yVelocity) && (!OnSolidGround()); ++i)
             {
-                if (!OnSolidGround())
-                {
-                    GLOBALS::player.m_y += 1;
-                }
+                GLOBALS::player.m_y += 1;
             }
+
+            ++(GLOBALS::player.m_yVelocity);
+            if (GLOBALS::player.m_yVelocity >= GLOBALS::player.m_yVelocityMax)
+                GLOBALS::player.m_yVelocity = GLOBALS::player.m_yVelocityMax;
         }
+
+        // No more vertical motion possible? then update velocity accordingly.
+        if (OnSolidGround() && !(GLOBALS::player.m_jumping))
+            GLOBALS::player.m_yVelocity = 0;
 
         RedrawScreen();
     } /* while(!bDone) */

@@ -345,11 +345,14 @@ void PlayGame(void)
             // only increase upward velocity every fourth frame so that the player can jump farther
             // horizontally before having reaching PLAYER_MAX_JUMP_HEIGHT_UNSCALED without increasing
             // how high the player can jump
-            if (!(GLOBALS::player.m_jumpedSoFar & 3))
+            //if (!(GLOBALS::player.m_jumpedSoFar & 3))
             {
-                ++(GLOBALS::player.m_yVelocity);
-                if (GLOBALS::player.m_yVelocity >= GLOBALS::player.m_yVelocityMax)
-                    GLOBALS::player.m_yVelocity = GLOBALS::player.m_yVelocityMax;
+                // velocity starts out at max and slows down as jump progresses to form
+                // something slightly resembling parabolic motion
+                if (GLOBALS::player.m_yVelocity > 4)
+                    GLOBALS::player.m_yVelocity -= 2;
+                    // but never let velocity get to zero because then we'd never finish
+                    // jumping
             }
 
             for (i = 0; i < GLOBALS::player.m_yVelocity; ++i)
@@ -379,6 +382,7 @@ void PlayGame(void)
                 GLOBALS::player.m_y += 1;
             }
 
+            // player falls faster the farther they fall (up to a terminal velocity)
             ++(GLOBALS::player.m_yVelocity);
             if (GLOBALS::player.m_yVelocity >= GLOBALS::player.m_yVelocityMax)
                 GLOBALS::player.m_yVelocity = GLOBALS::player.m_yVelocityMax;
@@ -502,6 +506,16 @@ void RedrawScreen(void)
                   OnSolidGround(), CanMoveUp(), GLOBALS::player.m_jumping);
 #endif
 
+    // fill with black any parts of the screen our view doesn't fill
+    signed int unfilled_height = al_get_display_height(GLOBALS::display) - SCREEN_HEIGHT_PIXELS_SCALED;
+    signed int unfilled_width = al_get_display_width(GLOBALS::display) - SCREEN_WIDTH_PIXELS_SCALED;
+
+    if (unfilled_height > 0)
+        al_draw_filled_rectangle(0, SCREEN_HEIGHT_PIXELS_SCALED, al_get_display_width(GLOBALS::display), al_get_display_height(GLOBALS::display), al_map_rgb(0,0,0));
+
+    if (unfilled_width > 0)
+        al_draw_filled_rectangle(SCREEN_WIDTH_PIXELS_SCALED, 0, al_get_display_width(GLOBALS::display), al_get_display_height(GLOBALS::display), al_map_rgb(0,0,0));
+
     DrawStatusBar();
 
     al_flip_display();
@@ -553,6 +567,7 @@ void ProcessAction(action_t action)
             {
                 GLOBALS::player.m_jumping = true;
                 GLOBALS::player.m_jumpedSoFar = 0;
+                GLOBALS::player.m_yVelocity = GLOBALS::player.m_yVelocityMax;
             }
 
             break;

@@ -4,9 +4,29 @@ PROGRAM_NAME = sam
 
 .PHONY: all clean $(PROGRAM_NAME)
 
+INCLUDE_DIRS = C:/MinGW/msys/1.0/include
+
+INCLUDE_STRING = $(patsubst %,-I%,$(INCLUDE_DIRS))
+
+LIB_DIRS = C:/MinGW/msys/1.0/lib
+LIB_NAMES = \
+ 	allegro            \
+	allegro_main       \
+	allegro_audio      \
+	allegro_acodec     \
+	allegro_image      \
+	allegro_physfs     \
+	allegro_primitives \
+	allegro_font       \
+	allegro_ttf        \
+	physfs
+
+LIB_STRING = $(patsubst %,-L%,$(LIB_DIRS)) $(patsubst %,-l%,$(LIB_NAMES))
+
 CXX = g++
-CXXFLAGS = -Wall -g -march=native -O1
-LDFLAGS = -lallegro -lallegro_main -lallegro_audio -lallegro_acodec -lallegro_image -lallegro_physfs -lallegro_primitives -lallegro_font -lallegro_ttf -lphysfs
+CXXFLAGS = -Wall -g -march=native -O1 $(INCLUDE_STRING)
+LDFLAGS = $(LIB_STRING) 
+RM = del /F /Q
 
 all: $(PROGRAM_NAME)
 

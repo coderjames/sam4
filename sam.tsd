@@ -1,0 +1,77 @@
+; for each tileset
+#tileset
+
+; write the tileset (or atlas) to a .PNG file with the name of the tileset, resulting in
+; a bitmap that is no more than 512 pixels wide
+#tilebitmap <TileSetIdentifier>.png 512
+#end tilebitmap
+
+; for each map in the tileset
+#map
+
+; write a header file for the map
+#file <MapIdentifier>.h
+##ifndef _<MapIdentifier>_H_
+##define _<MapIdentifier>_H_
+
+typedef struct {
+    signed short backTiles[<MapHeight>*<MapWidth>];
+    signed short midTiles[<MapHeight>*<MapWidth>];
+    signed short frontTiles[<MapHeight>*<MapWidth>];
+    signed short bounds[<MapHeight>*<MapWidth>];
+    signed short codes[<MapHeight>*<MapWidth>];
+} TMapData;
+
+extern TMapData <MapIdentifier>MapData;
+
+##endif
+#end file
+
+; and write the actual map data to a seperate source file
+#file <MapIdentifier>.cpp
+
+##include "<MapIdentifier>.h"
+
+TMapData <MapIdentifier>MapData =
+{
+
+{
+#mapdata
+<TSBackTile>,
+#end mapdata
+},
+
+; all of the middle-layer tiles
+{
+#mapdata
+<TSMidTile>,
+#end mapdata
+},
+
+; all of the front-layer tiles
+{
+#mapdata
+<TSFrontTile>,
+#end mapdata
+},
+
+; all of the bounding-box data
+{
+#mapdata
+<Bounds>,
+#end mapdata
+},
+
+; all of the map codes
+{
+#mapdata
+<BoundMapValue shr 8>,
+#end mapdata
+}
+
+};
+
+#end file
+#end map
+
+#end tileset

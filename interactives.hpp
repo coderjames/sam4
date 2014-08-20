@@ -23,7 +23,15 @@ protected:
 class TMobile : public TObject
 {
 public:
-    TMobile(unsigned int tileID, signed int x, signed int y) : TObject(tileID, x, y), m_xVelocity(0), m_yVelocity(0), m_jumping(false), m_jumpedSoFar(0), m_facing(eFACING_RIGHT) {};
+    TMobile(unsigned int tileID, signed int x, signed int y) :
+                TObject(tileID, x, y),
+                m_xVelocity(0),
+                m_yVelocity(0),
+                m_jumping(false),
+                m_jumpedSoFar(0),
+                m_facing(eFACING_RIGHT)
+        {};
+
     signed int m_xVelocity, m_yVelocity;
 
     // if jumping, how many unscaled pixels up has the player moved so far
@@ -37,7 +45,17 @@ public:
 class TPlayer : public TMobile
 {
 public:
-    TPlayer() : TMobile(366, 0, 0), m_frameIndex(0), m_seconds_since_last_frame_change(0.0), m_ammo(0), m_hasTNT(false), m_hasDisk(false), m_score(0), m_animation(eANIM_STANDING_RIGHT) {};
+    TPlayer() :
+            TMobile(366, 0, 0),
+            m_frameIndex(0),
+            m_seconds_since_last_frame_change(0.0),
+            m_ammo(0),
+            m_hasTNT(false),
+            m_hasDisk(false),
+            m_score(0),
+            m_animation(eANIM_STANDING_RIGHT)
+        {};
+
     virtual void Tick(double delta_seconds);
 
     virtual unsigned int TileID() const;

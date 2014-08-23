@@ -24,9 +24,10 @@ LIB_NAMES = \
 LIB_STRING = $(patsubst %,-L%,$(LIB_DIRS)) $(patsubst %,-l%,$(LIB_NAMES))
 
 CXX = g++
-CXXFLAGS = -Wall -g -march=native -O1 $(INCLUDE_STRING)
+CXXFLAGS = -std=gnu++11 -Wall -Wextra -g -march=native -O1 $(INCLUDE_STRING)
 LDFLAGS = $(LIB_STRING) 
-RM = del /F /Q
+#RM = del /F /Q
+RM = rm
 
 all: $(PROGRAM_NAME)
 

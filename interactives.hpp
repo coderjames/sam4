@@ -7,11 +7,11 @@ public:
     TObject(unsigned int tileID, signed int x, signed int y) : m_x(x), m_y(y), m_tileID(tileID) {};
     virtual ~TObject() {}; // don't need to do anything, but child classes may have more complex destruction needs
 
-    virtual void Tick(double delta_seconds) {};
+    virtual void Tick(double __attribute__ ((unused)) delta_seconds) {};
 
     virtual unsigned int TileID() const { return m_tileID; };
     virtual signed int DrawWidth() const { return TILE_WIDTH_PIXELS_UNSCALED; };
-    virtual bool CollidedWith(TObject &obj) { return false; };
+    virtual bool CollidedWith(TObject __attribute__ ((unused)) &obj) { return false; };
 
     // unscaled
     signed int m_x, m_y;
@@ -49,6 +49,7 @@ public:
             TMobile(366, 0, 0),
             m_frameIndex(0),
             m_seconds_since_last_frame_change(0.0),
+            m_bulletsFlying(0),
             m_ammo(0),
             m_hasTNT(false),
             m_hasDisk(false),
@@ -60,6 +61,9 @@ public:
 
     virtual unsigned int TileID() const;
     virtual signed int DrawWidth() const;
+    bool CanFireBullet() const;
+    void FireBullet();
+    void BulletDied();
     
     unsigned int Score() const { return m_score; };
     unsigned int Ammo() const { return m_ammo; };
@@ -68,12 +72,14 @@ public:
     // class constants
     enum
     {
-        m_yVelocityMax = 5
+        m_yVelocityMax = 5,
+        m_maxBulletsFlying = 1
     };
 
 private:
     unsigned int m_frameIndex;
     double m_seconds_since_last_frame_change;
+    unsigned int m_bulletsFlying;
 
     typedef enum
     {
@@ -142,7 +148,7 @@ class TAmmo : public TObject
 public:
     TAmmo(signed int x, signed int y) : TObject(354, x, y) {};
 
-    virtual bool CollidedWith(TObject &obj);
+    virtual bool CollidedWith(TObject &obj) override;
 };
 
 
@@ -151,7 +157,22 @@ class TPushable : public TObject
 public:
     TPushable(unsigned int tileID, signed int x, signed int y);
 
-    virtual bool CollidedWith(TObject &obj);
+    virtual bool CollidedWith(TObject &obj) override;
+};
+
+
+class TBullet : public TObject
+{
+public:
+    TBullet(signed int x, signed int y, TFacing directionMoving);
+    virtual ~TBullet();
+
+    virtual void Tick(double delta_seconds) override;
+    virtual signed int DrawWidth() const override { return 7; };
+    virtual bool CollidedWith(TObject &obj) override;
+
+private:
+    double m_xReal, m_xVelocity;
 };
 
 #endif

@@ -99,7 +99,7 @@ int main(int argc, char **argv)
 }
 
 
-bool InitGame(int argc, char **argv)
+bool InitGame(int __attribute__ ((unused)) argc, char **argv)
 {
     if (!al_init())
     {
@@ -573,6 +573,8 @@ void ProcessAction(action_t action)
             break;
 
         case eACTION_FIRE:
+        	if (GLOBALS::player.CanFireBullet())
+        		GLOBALS::player.FireBullet();
             break;
     }
 }

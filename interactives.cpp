@@ -1,4 +1,5 @@
 #include <cassert>
+#include <cstdio>
 
 #include "sam_shared.hpp"
 #include "interactives.hpp"
@@ -72,6 +73,36 @@ signed int TPlayer::DrawWidth() const
 }
 
 
+bool TPlayer::CanFireBullet() const
+{
+	return (m_ammo > 0) && (m_bulletsFlying < m_maxBulletsFlying);
+}
+
+
+void TPlayer::FireBullet()
+{
+	assert(m_ammo);
+	assert(m_bulletsFlying < m_maxBulletsFlying);
+
+	--m_ammo;
+	++m_bulletsFlying;
+
+	signed int x = m_x;
+	if (m_facing == eFACING_LEFT) // need to put the bullet to the left of the player
+		x -= (TILE_WIDTH_PIXELS_UNSCALED / 2);
+	else // facing right, so put bullet to the right of the player
+		x += (DrawWidth() + (TILE_WIDTH_PIXELS_UNSCALED / 2));
+
+	signed int y = m_y + (TILE_HEIGHT_PIXELS_UNSCALED / 6);
+
+	GLOBALS::interactives.push_back(new TBullet(x, y, m_facing));
+}
+
+void TPlayer::BulletDied()
+{
+	assert(m_bulletsFlying);
+	--m_bulletsFlying;
+}
 
 bool TGlasses::CollidedWith(TObject &obj)
 {
@@ -184,7 +215,7 @@ bool TAmmo::CollidedWith(TObject &obj)
 
 TPushable::TPushable(unsigned int tileID, signed int x, signed int y) : TObject(tileID, x, y)
 {
-};
+}
 
 bool TPushable::CollidedWith(TObject &obj)
 {
@@ -216,4 +247,33 @@ bool TPushable::CollidedWith(TObject &obj)
 
     // always returns false because pushables are never removed, even when touched
     return false;
+}
+
+
+TBullet::TBullet(signed int x, signed int y, TFacing directionMoving) : TObject(280, x, y), m_xReal(x), m_xVelocity(TILE_WIDTH_PIXELS_UNSCALED * 3)
+{
+	if (directionMoving == eFACING_LEFT)
+		m_xVelocity *= -1.0;
+
+    printf("\nDBUG: created bullet at (%d, %d) moving %d", x, y, directionMoving);
+};
+
+void TBullet::Tick(double delta_seconds)
+{
+	m_xReal += (delta_seconds * m_xVelocity); // velocity in pixels per second
+	m_x = int(m_xReal);
+
+	// if colliding with a map bounding border, need to delete myself
+}
+
+bool TBullet::CollidedWith(TObject __attribute__ ((unused)) &obj)
+{
+	// always return true because bullets are always removed when they collide with something,
+	// regardless of what it was.
+	return true;
+}
+
+TBullet::~TBullet()
+{
+	GLOBALS::player.BulletDied();
 }

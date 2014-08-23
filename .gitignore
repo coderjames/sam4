@@ -12,3 +12,9 @@
 *.la
 *.a
 *.sublime-project
+/mingw32-build/
+
+*.cproject
+*.project
+*.prefs
+*.sublime-workspace

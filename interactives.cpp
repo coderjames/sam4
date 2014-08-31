@@ -75,13 +75,14 @@ signed int TPlayer::DrawWidth() const
 
 bool TPlayer::CanFireBullet() const
 {
-	return (m_ammo > 0) && (m_bulletsFlying < m_maxBulletsFlying);
+	return (m_bulletsFlying < m_maxBulletsFlying) && (m_ammo > 0);
 }
 
 
 void TPlayer::FireBullet()
 {
-	assert(m_ammo);
+	assert(m_ammo > 0);
+	assert(m_bulletsFlying >= 0);
 	assert(m_bulletsFlying < m_maxBulletsFlying);
 
 	--m_ammo;

@@ -173,6 +173,9 @@ public:
 
 private:
     double m_xReal, m_xVelocity;
+
+    TBullet(const TBullet&) = delete; /* disable copy constructor [C++1] */
+    TBullet& operator=(const TBullet&) = delete; /* disable assignment operator [C++11] */
 };
 
 #endif

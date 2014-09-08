@@ -115,7 +115,7 @@ void RedrawScreen(void);
 void CreateBackgroundImage(void);
 
 bool OnSolidGround(void);
-bool CanMoveUp(void);
+bool CanMoveVerticalBy(double pixels);
 bool InDeathSquare(void);
 
 bool ObjectCollide(const TObject *object1, const TObject *object2);

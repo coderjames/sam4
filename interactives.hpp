@@ -1,11 +1,14 @@
 #ifndef _INTERACTIVES_HPP_
 #define _INTERACTIVES_HPP_
 
+#include "sam_shared.hpp"
+
 class TObject
 {
 public:
     TObject(unsigned int tileID, signed int x, signed int y) : m_x(x), m_y(y), m_tileID(tileID) {};
-    virtual ~TObject() {}; // don't need to do anything, but child classes may have more complex destruction needs
+    virtual ~TObject() {}; // don't need to do anything for this class,
+                           // but child classes may have more complex destruction needs
 
     virtual void Tick(double __attribute__ ((unused)) delta_seconds) {};
 
@@ -13,8 +16,8 @@ public:
     virtual signed int DrawWidth() const { return TILE_WIDTH_PIXELS_UNSCALED; };
     virtual bool CollidedWith(TObject __attribute__ ((unused)) &obj) { return false; };
 
-    // unscaled
-    signed int m_x, m_y;
+    // unscaled pixels
+    double m_x, m_y;
 
 protected:
     unsigned int m_tileID;
@@ -25,55 +28,65 @@ class TMobile : public TObject
 public:
     TMobile(unsigned int tileID, signed int x, signed int y) :
                 TObject(tileID, x, y),
-                m_xVelocity(0),
-                m_yVelocity(0),
-                m_jumping(false),
-                m_jumpedSoFar(0),
+                m_xVelocityPerSecond(0),
+                m_yVelocityPerSecond(0),
                 m_facing(eFACING_RIGHT)
         {};
 
-    signed int m_xVelocity, m_yVelocity;
+    TFacing Facing() const { return m_facing; };
 
-    // if jumping, how many unscaled pixels up has the player moved so far
-    // (stop jumping when this reaches the limit of how far to jump)
-    bool m_jumping;
-    signed int m_jumpedSoFar;
+protected:
+    double m_xVelocityPerSecond, m_yVelocityPerSecond;
 
     TFacing m_facing;
 };
 
+class TPlayer;
+typedef void (TPlayer::*TStateRoutine)(void);
+
 class TPlayer : public TMobile
 {
 public:
-    TPlayer() :
-            TMobile(366, 0, 0),
-            m_frameIndex(0),
-            m_seconds_since_last_frame_change(0.0),
-            m_bulletsFlying(0),
-            m_ammo(0),
-            m_hasTNT(false),
-            m_hasDisk(false),
-            m_score(0),
-            m_animation(eANIM_STANDING_RIGHT)
-        {};
+    typedef enum
+    {
+    	eSTATE_STANDING,
+    	eSTATE_WALKING,
+    	eSTATE_JUMPING,
+    	eSTATE_FALLING,
+    	eSTATE_FIRING,
+    	//eSTATE_DYING,
+    	//eSTATE_EXITING_LEVEL,
+
+    	eSTATE_COUNT // ALWAYS LAST - is the number of states in the enum
+    } TPlayerState;
+
+    TPlayer();
+    void Reset(signed int x, signed int y);
 
     virtual void Tick(double delta_seconds);
 
     virtual unsigned int TileID() const;
     virtual signed int DrawWidth() const;
-    bool CanFireBullet() const;
-    void FireBullet();
+
+    void ProcessAction(action_t action);
+
     void BulletDied();
     
     unsigned int Score() const { return m_score; };
     unsigned int Ammo() const { return m_ammo; };
     void AddAmmo(unsigned int shots) { m_ammo += shots; };
     
+    const char *StateAsString() const;
+
     // class constants
     enum
     {
-        m_yVelocityMax = 5,
-        m_maxBulletsFlying = 1
+        MAX_Y_VELOCITY_PER_SECOND = 80, // positive means down, negative means up
+        MAX_X_VELOCITY_PER_SECOND = 64, //
+        ACCELERATION_PER_SECOND   = 80, // positive means down, negative means up
+        m_maxBulletsFlying = 1,
+
+        eFRAMES_PER_ANIMATION = 4
     };
 
 private:
@@ -92,8 +105,6 @@ private:
 
         // must be last
         eNUM_PLAYER_ANIMATIONS,
-
-        eFRAMES_PER_ANIMATION = 4
     } TPlayerAnimation;
     
     unsigned int m_ammo;
@@ -102,10 +113,25 @@ private:
     unsigned int m_score;
 
     TPlayerAnimation m_animation;
+    TPlayerState m_state;
 
+    void ChangeToState(TPlayerState newState);
+    void FireBullet();
+    void StartJumping();
+    void StartWalking();
+    void StartStanding();
+    void StartFalling();
+    void MoveHorizontal(double deltaSeconds);
+    void MoveVertical(double deltaSeconds);
 
+    TStateRoutine m_stateEnter[eSTATE_COUNT];
+    TStateRoutine m_stateExit[eSTATE_COUNT];
+    TStateRoutine m_stateTick[eSTATE_COUNT];
+
+    static const char *m_stateStrings[eSTATE_COUNT];
     static const unsigned int frames[eNUM_PLAYER_ANIMATIONS][eFRAMES_PER_ANIMATION];
     static const signed int widths[eNUM_PLAYER_ANIMATIONS][eFRAMES_PER_ANIMATION];
+
 };
 
 class TGlasses : public TObject
